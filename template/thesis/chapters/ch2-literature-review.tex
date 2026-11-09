@@ -1,0 +1,59 @@
+\chapter{LITERATURE REVIEW}
+
+\section{Tabular Software Metrics and Vulnerability Detection}
+
+When implementing vulnerability detection models for software engineering, tabular data remains highly relevant since they are lightweight. This format often utilizes metric-based features that were extracted from the source code and their metadata from various repositories. Although the efficiency depends on the feature extraction method itself, it bypasses the need for extensive feature engineering, making it lightweight than other feature representations methods. The JavaScript vulnerability datasets introduced by \citet{ferenc_challenging_2019}  and \citet{viszkok_improving_2021} rely on metric-based features and serve as the benchmark that demonstrates the efficacy of the lightweight tabular dataset in this study.
+
+In the world of tabular data processing, Gradient Boosted Decision Tree (GBDT) algorithms such as XGBoost remain as robust baselines. Their strong performance came from their intrinsic ability to handle diverse and heterogeneous feature distributions through successive space partitioning when handling data \citep{ye_closer_2025}. While GBDTs remain highly effective, modern deep learning architectures are increasingly narrowing this performance gap by demonstrating a improvement to map higher-order interactions and complex non-linear feature compositions within tabular datasets \citep{ye_closer_2025}.
+
+However, the narrowing performance gap between deep learning and GBDTs does not mean that every deep learning architecture will perform well on every dataset and task. It is still necessary to identify an architecture that is appropriate for the specific data type and problem at hand. Architectures that are originally designed for specific other data types, such as spatial locality in images or sequential order in text, carry assumptions that do not naturally hold for tabular data, where the features are heterogeneous and have no inherent ordering or spatial relationship.
+
+This leaves a gap for further exploration of deep learning approaches that are genuinely designed for tabular data, while also being efficient enough to support the fast-paced nature of CI/CD pipelines. TabM is reported as a method that offers both of these requirements. Instead of introducing heavy computational overhead, TabM uses parameter-efficient ensembling, where a single model behaves like an ensemble of independent networks that share most of their parameters, producing multiple predictions at once without significant memory costs \citep{gorishniy_tabm_2025}. This makes TabM a well-suited choice for the lightweight and real-time demands of the vulnerability detection task in this study.
+
+\section{Comparative Analysis of Previous Vulnerability Detection Models}
+
+The foundation for lightweight JavaScript vulnerability prediction using software metrics was established by \citet{ferenc_challenging_2019} and subsequently expanded by \citet{viszkok_improving_2021}. By combining static source code features with historical process metrics into a standardized software metrics tabular dataset, they provided a highly lightweight and efficient alternative to complex code analysis, significantly advancing the field of automated vulnerability detection. However, to the best of our literature search, their methodologies are limited and relied exclusively on classical machine learning models (such as Random Forest) and deep learning algorithms (such as Deep Neural Network). This leaves a gap for future exploration where modern learning models could further improve predictive performance on such tabular software metrics datasets.
+
+Several studies have attempted to build upon these datasets. \citet{sheneamer_vulnerable_2024} expanded the exploration by applying a Convolutional Neural Network (CNN). However, this approach is fundamentally mismatched, as CNNs are spatially biased models better suited for image data and tabular features lack spatial relationships \citep{ingrosso_data-driven_2022}. \citet{kalouptsoglou_examining_2022} extended the exploration further by combining the software metrics with text features mined directly from source code into a single unified model. However, their results did not achieve higher results. \citet{mosolygo_towards_2021} took a different direction by constructing Word2Vec vector similarity with custom filtering rules, offering built-in explainability and the ability to provide evidence for each flagged instance. However, their approach did not incorporate the software metrics component of the dataset and does not align with our research.
+
+Other studies have explored advanced deep learning approaches. However, most of them suffer from being computationally expensive, which makes them unsuitable for high-speed CI/CD environments. \citet{shwartz-ziv_tabular_2022} demonstrated that combining deep learning models with XGBoost outperformed individual deep models, standalone XGBoost, and classical ensembles alike, but it requires a large amount of computational resources. Similarly, \citet{gorishniy_revisiting_2023} proposed the Feature Tokenizer Transformer (FT-Transformer), which produces richer and deeper feature representation. However, it still remains computationally expensive for lightweight deployment. The proposed approach in this study therefore aims to identify models that balance predictive accuracy with computational efficiency, making them practical for JavaScript vulnerability detection within rapid CI/CD pipelines. A comparative analysis of the algorithms, datasets, methods, and their respective advantages and disadvantages is summarized in Table~\ref{tab:vuln-methods}.
+
+{\footnotesize
+\setlength{\tabcolsep}{3pt}
+\renewcommand{\arraystretch}{1.15}
+\begin{longtable}{|>{\raggedright\arraybackslash}p{2.2cm}|>{\raggedright\arraybackslash}p{2.6cm}|>{\raggedright\arraybackslash}p{2.7cm}|>{\raggedright\arraybackslash}p{2.3cm}|>{\raggedright\arraybackslash}p{3.2cm}|}
+\caption{Comparison of Recent Vulnerability Prediction Methodologies}
+\label{tab:vuln-methods}\\
+\hline
+\textbf{Author \& Year} & \textbf{Algorithm / Architecture} & \textbf{Dataset Size \& Type} & \textbf{Imbalance Handling} & \textbf{Advantages and Disadvantages} \\
+\hline
+\endfirsthead
+\multicolumn{5}{c}{\tablename\ \thetable\ (continued)}\\
+\hline
+\textbf{Author \& Year} & \textbf{Algorithm / Architecture} & \textbf{Dataset Size \& Type} & \textbf{Imbalance Handling} & \textbf{Advantages and Disadvantages} \\
+\hline
+\endhead
+\hline
+\endfoot
+\citet{ferenc_challenging_2019} & 8 ML algorithms, including KNN, Random Forest and 2 DL algorithms & 12,125 JavaScript functions using only static source code metrics & Tested random under-sampling and over-sampling at various ratios & (+) Introduced the foundational tabular dataset mapping JS source code to static software metrics. (-) Relied on traditional classical machine learning and deep learning models \\
+\hline
+\citet{viszkok_improving_2021} & 8 ML algorithms, including KNN, Random Forest and 2 DL algorithms & 8,038 JavaScript functions using static and process metrics & Tested random under-sampling and over-sampling at various ratios & (+) Expanded the tabular dataset by adding historical process metrics. (-) Still relied on traditional classical machine learning and deep learning models \\
+\hline
+\citet{sheneamer_vulnerable_2024} & Stacked 1D CNNs including VGG16, VGG19, AlexNet, and ResNet & 30,367 JavaScript functions across 3 tabular metric datasets (Ferenc et al., Viszkok et al., and Apache Tomcat) & Applied random under-sampling and random over-sampling techniques & (+) Expanded the exploration of the dataset by applying an advanced neural network method. (-) Relies on spatially biased CNNs \\
+\hline
+\citet{shwartz-ziv_tabular_2022} & Compared 4 tabular deep learning models (TabNet, DNF-Net, NODE, 1D-CNN) against XGBoost & 11 diverse tabular datasets containing up to 1,000,000 samples & Not explicitly addressed & (+) The ensemble combining both deep learning models and XGBoost outperformed individual deep models, standalone XGBoost, and ensembles made strictly of classical models. (-) Demonstrated the ensemble of XGBoost and deep models are computationally expensive \\
+\hline
+\citet{gorishniy_revisiting_2023} & Proposed FT-Transformer and ResNet architectures for tabular data & 11 diverse public tabular datasets up to 1,200,192 samples & Not explicitly addressed in the methodology & (+) Richer and deeper representation when fed more features (-) FT-Transformer demands high computational resources \\
+\hline
+\citet{kalouptsoglou_examining_2022} & ML, DL (CNN), and ensemble models & Processed \citet{ferenc_challenging_2019} Dataset: 12,106 open-source JavaScript functions & Random over-sampling and under-sampling & (+) Extended the exploration further by combining the original software metrics and the text features mined from the source codes into a unified model. (-) The combined models did not achieved higher result than the original study \\
+\hline
+\citet{mosolygo_towards_2021} & Word2vec vector similarity with custom filtering rules & \citet{ferenc_challenging_2019} Dataset processed into 186 real-world vulnerability fixes from 91 JavaScript projects & Inherently unaffected; relies strictly on similarity to reference lines & (+) Has built-in explainability and able to provide proof for each flagged data. (-) The model did not rely on the tabular software metrics data \\
+\hline
+\end{longtable}
+}
+
+\section{Identified Research Gap and Significance of the Study}
+
+As synthesized in Table 2.1, a critical gap exists in the current application of advanced machine learning and deep learning methods for JavaScript vulnerability detection using tabular software metrics datasets. Several studies have attempted to address this by building more advanced models on the dataset. However, these efforts still remain limited. Several approaches are fundamentally mismatched for tabular data due to their reliance on spatially biased architectures, others are misaligned with the research scope as they disregard the software metrics feature entirely, and some simply fail to achieve an improvement over existing baselines. On the other hand, studies that have applied advanced deep learning to tabular datasets more broadly still share a common limitation: expensive computational cost, which makes them impractical for deployment in high-speed CI/CD pipelines where lightweight and efficient is essential.
+
+To address this gap, this study proposes TabM, a recent native tabular method designed for processing tabular data efficiently, and evaluates it on both tabular datasets. Introduced by \citet{gorishniy_tabm_2025}, TabM represents a significant advancement in native tabular deep learning through its use of parameter-efficient ensembling, which allows a single model to function as multiple neural networks simultaneously without demanding excessive memory or computation. This property may make TabM well-suited for integration into rapid CI/CD pipelines. To benchmark its performance, TabM is compared against two baselines. The FT-Transformer serves as the deep learning baseline, offering richer and deeper feature representations, though it remains computationally expensive. A Gradient Boosted Decision Tree (GBDT) model is also included as the machine learning baseline, representing the established strong baseline for tabular data processing, in order to assess whether modern deep learning approach can compete with, or surpass, the dominant approach for structured tabular data.

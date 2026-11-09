@@ -215,7 +215,7 @@
 \newcommand{\@secondexaminer}{}
 
 %------------------------------------------------------------
-%Define cover in Indonesian
+%Define cover in English
 %------------------------------------------------------------
 \def\cover{%
   \thispagestyle{empty}%
@@ -226,22 +226,22 @@
       \if@msproposal%
         \MakeUppercase{\normalfont\bfseries Proposal Tugas Akhir}\\
       \else
-        \MakeUppercase{\normalfont\bfseries Skripsi}\\
+        \MakeUppercase{\normalfont\bfseries Thesis}\\
       \fi
       \vspace{1.5cm}	
       \MakeUppercase{\normalfont\bfseries\@titleind}\par\nobreak
       \vspace{1.0cm}
       \MakeUppercase{\normalfont\slshape\bfseries\@titleeng}\par\nobreak
        \vfill
-       \includegraphics{logougm}
+       \includegraphics[width=3.5cm]{logougm.png}
        \vfill
        {\normalfont
         \MakeUppercase{\@fullname}\\
         \@idnum}\\
        \vspace{1.5cm}
        {\normalfont 
-         \MakeUppercase{\normalfont\bfseries Program Studi \@program}\\
-         \MakeUppercase{\normalfont\bfseries Departemen \@dept}\\
+         \MakeUppercase{\normalfont\bfseries Study Program \@program}\\
+         \MakeUppercase{\normalfont\bfseries Department \@dept}\\
          \MakeUppercase{\normalfont\bfseries\@faculty}\\
          \MakeUppercase{\normalfont\bfseries\@university}\\
          \MakeUppercase{\normalfont\bfseries\@city}\\
@@ -294,6 +294,50 @@
       \end{singlespace}
       \end{center}
 \addcontentsline{toc}{chapter}{Halaman Judul}
+}  
+
+%------------------------------------------------------------
+%Define titlepage in English
+%------------------------------------------------------------
+\def\titlepageeng{%
+  \newpage
+  \thispagestyle{empty}%
+    \begin{center}
+      \begin{singlespace}
+      \if@msproposal%
+        \MakeUppercase{\normalfont\bfseries Final Project Proposal}\\
+      \else
+        \MakeUppercase{\normalfont\bfseries Undergraduate Thesis}\\
+      \fi
+      \vspace{1.5cm}	
+      \MakeUppercase{\normalfont\bfseries\@titleeng}\par\nobreak
+      \vspace{1.0cm}
+      \MakeUppercase{\normalfont\slshape\bfseries\@titleind}\par\nobreak
+      \vspace{1.5cm}
+       \if@msthesis%
+        {\normalfont Submitted in partial fulfillment of the requirements for the degree of\\
+         \@gelar{}}\\
+       \else
+        {\normalfont Research Proposal}\\
+       \fi
+       \vfill
+       \includegraphics[width=3.5cm]{logougm.png}
+       \vfill
+       {\normalfont
+        \MakeUppercase{\@fullname}\\
+        \@idnum}\\
+       \vspace{1.5cm}
+       {\normalfont 
+         \MakeUppercase{\normalfont\bfseries Study Program \@program}\\
+         \MakeUppercase{\normalfont\bfseries Department \@dept}\\
+         \MakeUppercase{\normalfont\bfseries Faculty of Mathematics and Natural Sciences}\\
+         \MakeUppercase{\normalfont\bfseries Gadjah Mada University}\\
+         \MakeUppercase{\normalfont\bfseries Yogyakarta}\\
+         \vspace{0.5cm}
+         {\normalfont\bfseries\@yearsubmit}}\\
+      \end{singlespace}
+      \end{center}
+\addcontentsline{toc}{chapter}{Title Page}
 }  
 
 %------------------------------------------------------------

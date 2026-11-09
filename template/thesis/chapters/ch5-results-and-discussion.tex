@@ -1,0 +1,270 @@
+\chapter{RESULTS AND DISCUSSION}
+\sloppy
+\emergencystretch=3em
+
+\section{Experimental Design}
+
+Table \ref{tab:realized-features} records the final inputs that enter the model training after preprocessing. The identifier columns, zero-variance columns, and one member of each near-perfectly collinear pair are removed from both datasets. In addition, the positional columns are isolated so that they never enter the feature matrix. This leaves 32 usable features on Ferenc and 54 usable features on Viszkok. The cleaned datasets are then splitted using stratify with a 60/20/20 partition, which yields the exact number of train, validation, and test sizes. Finally, the \texttt{scale\_pos\_weight} is computed as the ratio of non-vulnerable to vulnerable rows and this is a fixed ratio and is not tuned across all models.
+
+\begin{table}[H]
+  \centering
+  \caption{Realized feature counts, stratified split sizes (seed = 42), and class-weight ratios}
+  \label{tab:realized-features}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{4cm}|>{\centering\arraybackslash}p{4cm}|}
+    \hline
+    \textbf{Item} & \textbf{Ferenc et al. (2019)} & \textbf{Viszkok et al. (2021)} \\
+    \hline
+    Features after filtering & 32 & 54 \\
+    Train (60\%) & 7,275 & 4,822 \\
+    Validation (20\%) & 2,425 & 1,608 \\
+    Test (20\%) & 2,425 & 1,608 \\
+    scale\_pos\_weight & 7.1013 & 7.3715 \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+\section{Experimental Results}
+
+\subsection{Best Hyperparameters}
+
+This subsection reports the optimal configurations found on each model within our search space. Each tuning was run independently on each dataset, therefore the tuning values differs between Ferenc and Viszkok dataset, even though they both used the same search settings.
+
+On XGBoost, the winning Ferenc trial prefers less trees, a deeper, more heavily subsampled ensemble (780 trees, depth 12, subsample 0.5132), while the trial on Viszkok dataset prefers fewer, twice as many trees with a higher learning rate and subsample close to one. The final best hyperparameters for XGBoost are summarized in Table \ref{tab:best-xgboost}.
+
+\begin{table}[H]
+  \centering
+  \caption{Best XGBoost hyperparameters after 50 Optuna TPE trials on each validation set}
+  \label{tab:best-xgboost}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{3.5cm}|>{\centering\arraybackslash}p{3.5cm}|}
+    \hline
+    \textbf{Parameter} & \textbf{Ferenc} & \textbf{Viszkok} \\
+    \hline
+    n\_estimators & 780 & 1448 \\
+    max\_depth & 12 & 7 \\
+    learning\_rate & 0.065 & 0.1095 \\
+    subsample & 0.799 & 0.9395 \\
+    colsample\_bytree & 0.578 & 0.7700 \\
+    min\_child\_weight & 2 & 4 \\
+    reg\_alpha & 0.29 & 0.3595 \\
+    reg\_lambda & 4.33 & 3.1062 \\
+    Best validation PR-AUC & 0.81 & 0.9027 \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+On TabM, the winning Ferenc trial is a wider network with a smaller ensemble (three layers, hidden width 366, $k = 43$), whereas Viszkok selects a deeper, narrower network with a slightly larger ensemble (three layers, hidden width 196, $k = 46$). Batch size is 1024 in both winning trials. The final best hyperparameters for TabM are summarized in Table \ref{tab:best-tabm}.
+
+\begin{table}[H]
+  \centering
+  \caption{Best TabM hyperparameters after 50 Optuna TPE trials on each validation set}
+  \label{tab:best-tabm}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{3.5cm}|>{\centering\arraybackslash}p{3.5cm}|}
+    \hline
+    \textbf{Parameter} & \textbf{Ferenc} & \textbf{Viszkok} \\
+    \hline
+    num\_layers & 3 & 3 \\
+    hidden\_dim & 366 & 196 \\
+    dropout & 0.3857 & 0.3831 \\
+    learning\_rate & 0.006 & 0.0098 \\
+    weight\_decay & 8.749e-5 & 2.492e-6 \\
+    batch\_size & 1024 & 1024 \\
+    k & 43 & 46 \\
+    Best validation PR-AUC & 0.8091 & 0.9035 \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+On FT-Transformer, the winning Ferenc trial uses a wider token, more heads, and three layers (\texttt{d\_token} = 336, eight heads, batch size 512), while Viszkok selects a narrower token, fewer heads, and two layers (\texttt{d\_token} = 268, four heads, batch size 256). The final best hyperparameters for FT-Transformer are summarized in Table \ref{tab:best-ft-transformer}.
+
+\begin{table}[H]
+  \centering
+  \caption{Best FT-Transformer hyperparameters after 50 Optuna TPE trials on each validation set}
+  \label{tab:best-ft-transformer}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{3.5cm}|>{\centering\arraybackslash}p{3.5cm}|}
+    \hline
+    \textbf{Parameter} & \textbf{Ferenc} & \textbf{Viszkok} \\
+    \hline
+    n\_heads & 8 & 4 \\
+    num\_layers & 3 & 2 \\
+    attention\_dropout & 0.1302 & 0.1734 \\
+    ffn\_dropout & 0.2651 & 0.1024 \\
+    ffn\_factor & 1.7994 & 2.3851 \\
+    learning\_rate & 3.124e-4 & 1.032e-4 \\
+    weight\_decay & 9.387e-6 & 2.410e-5 \\
+    batch\_size & 512 & 256 \\
+    d\_token & 336 & 268 \\
+    Best validation PR-AUC & 0.7799 & 0.8924 \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+\subsection{Performance Results}
+
+After the final retrain with the hyperparameters in Tables \ref{tab:best-xgboost}--\ref{tab:best-ft-transformer}, each model is scored once on the held-out test split. The fields that are reported are PR-AUC, F2-Score, and MCC as defined in Section 3.8.1.
+
+On Ferenc, the three models receive the same 32-feature test matrix of 2,425 functions. PR-AUC is computed from the predicted probabilities, while F2 and MCC are computed from hard labels obtained by applying a threshold of 0.5. The test-set predictive scores for Ferenc et al. (2019) are summarized in Table \ref{tab:perf-ferenc}.
+
+\begin{table}[H]
+  \centering
+  \caption{Test-set predictive performance on Ferenc et al. (2019), 32 features}
+  \label{tab:perf-ferenc}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{2.5cm}|>{\centering\arraybackslash}p{2.5cm}|>{\centering\arraybackslash}p{2.5cm}|}
+    \hline
+    \textbf{Model} & \textbf{PR-AUC} & \textbf{F2-Score} & \textbf{MCC} \\
+    \hline
+    XGBoost & 0.8039 & 0.7071 & 0.6750 \\
+    TabM & 0.7658 & 0.7002 & 0.6367 \\
+    FT-Transformer & 0.7518 & 0.6714 & 0.4679 \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+XGBoost leads every column on Ferenc. TabM is second on all three metrics and stays within 0.0381 PR-AUC of XGBoost, while FT-Transformer trails TabM by a further 0.0140 PR-AUC. The spread however, is wider on MCC with 0.6750 against 0.6367 against 0.4679 than on PR-AUC, so the models separate more clearly once scores are collapsed at threshold 0.5.
+
+On Viszkok, the same evaluation is applied to the 54-feature test matrix of 1,608 functions, again after an independent retrain with that dataset's winning hyperparameters. The test-set predictive scores for Viszkok et al. (2021) are summarized in Table \ref{tab:perf-viszkok}.
+
+\begin{table}[H]
+  \centering
+  \caption{Test-set predictive performance on Viszkok et al. (2021), 54 features}
+  \label{tab:perf-viszkok}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{2.5cm}|>{\centering\arraybackslash}p{2.5cm}|>{\centering\arraybackslash}p{2.5cm}|}
+    \hline
+    \textbf{Model} & \textbf{PR-AUC} & \textbf{F2-Score} & \textbf{MCC} \\
+    \hline
+    XGBoost & 0.9071 & 0.8091 & 0.7773 \\
+    TabM & 0.8816 & 0.7930 & 0.6826 \\
+    FT-Transformer & 0.8856 & 0.8193 & 0.7298 \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+XGBoost again leads PR-AUC and MCC. FT-Transformer is second on those two fields and only 0.0040 PR-AUC above TabM, so the deep models are nearly tied on the primary metric, PR-AUC. FT-Transformer also records the highest F2 (0.8193), slightly above XGBoost (0.8091) and TabM (0.7930). That higher F2 on FT-Transformer is the only time a deep learning model wins on either dataset.
+
+Across both datasets, XGBoost performs the best, scoring highest on the primary metric (PR-AUC) and on MCC. Its PR-AUC lead over the best deep model is 0.0381 on Ferenc (against TabM) and 0.0215 on Viszkok (against FT-Transformer), so its advantage is clearer on the static-metric table than on the process-enriched one. Between the deep models the ranking differs depending on the dataset. TabM is ahead of FT-Transformer on Ferenc, while FT-Transformer is ahead on Viszkok, narrowly on PR-AUC but more clearly on F2 and MCC. This suggest that TabM performs better on a dataset that has more rows while FT-Transformer performs better on a dataset that has more features. FT-Transformer’s F2 on Viszkok is also the only metric on which a deep model beats XGBoost on either dataset. The absolute scores are higher for every architecture on Viszkok than on Ferenc, which is consistent with the added process metrics, however, the two datasets are not ranked against each other as a single scoreboard.
+
+\subsection{Efficiency Results}
+
+The efficiency of each model are measured from the same final retrain used for section 5.3.2. There are four metrics to be compared between each model: inference latency, retraining time, model size, and peak RAM at inference. Optuna search time is excluded because it is an amortized model selection cost. Retraining time is considered as the primary cost since it is the recurring cost of refitting the model after the hyperparameters are already fixed.
+
+\begin{table}[H]
+  \centering
+  \caption{Test-set efficiency on Ferenc et al. (2019), 32 features}
+  \label{tab:eff-ferenc}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{2.5cm}|>{\centering\arraybackslash}p{2.2cm}|>{\centering\arraybackslash}p{2.2cm}|>{\centering\arraybackslash}p{2.4cm}|}
+    \hline
+    \textbf{Model} & \textbf{Latency (ms/sample)} & \textbf{Retrain (min)} & \textbf{Size (MB)} & \textbf{Peak RAM (MB)} \\
+    \hline
+    XGBoost & 0.011 & 0.021 & 1.851 & 291\\
+    TabM & 0.987 & 0.294 & 2.349 & 1,401 \\
+    FT-Transformer & 1.886 & 1.880 & 10.389 & 2,021 \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+XGBoost is the cheapest model on Ferenc across every metric: 0.021 min to retrain, 0.011 ms/sample to score, a 1.851 MB checkpoint, and 291 MB peak RAM. TabM sits in the middle, requiring 0.294 min to retrain (about 14 times XGBoost) and 0.987 ms/sample latency (about 90 times XGBoost), with a 2.349 MB checkpoint and 1,401 MB peak RAM. FT-Transformer is the most expensive model by a wide margin: 1.880 min to retrain (about 6.4 times TabM and 90 times XGBoost), 1.886 ms/sample latency, a 10.389 MB checkpoint, and 2,021 MB peak RAM.
+
+\begin{table}[H]
+  \centering
+  \caption{Test-set efficiency on Viszkok et al. (2021), 54 features}
+  \label{tab:eff-viszkok}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{2.5cm}|>{\centering\arraybackslash}p{2.2cm}|>{\centering\arraybackslash}p{2.2cm}|>{\centering\arraybackslash}p{2.4cm}|}
+    \hline
+    \textbf{Model} & \textbf{Latency (ms/sample)} & \textbf{Retrain (min)} & \textbf{Size (MB)} & \textbf{Peak RAM (MB)} \\
+    \hline
+    XGBoost & 0.003 & 0.008 & 0.409 & 288 \\
+    TabM & 0.998 & 0.061 & 1.037 & 1,705 \\
+    FT-Transformer & 1.634 & 0.764 & 5.228 & 2,472 \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+XGBoost again dominates the Viszkok efficiency table across every metric: 0.008 min to retrain, 0.003 ms/sample latency, the smallest checkpoint (0.409 MB), and 288 MB peak RAM. TabM sits in the middle, requiring 0.061 min to retrain (about 7.6 times XGBoost) and 0.998 ms/sample latency (about 333 times XGBoost), with a 1.037 MB checkpoint and 1,705 MB peak RAM. FT-Transformer is the most expensive model: 0.764 min to retrain (about 12.5 times TabM and 95.5 times XGBoost), 1.634 ms/sample latency, a 5.228 MB checkpoint, and the highest peak RAM at 2,472 MB.
+
+% \begin{figure}[H]
+%   \centering
+%   \framebox[\textwidth]{\rule{0pt}{6cm}\texttt{[Figure 5.1 placeholder: PR-AUC vs retraining time (min), Ferenc and Viszkok]}}
+%   \caption{Precision--recall AUC against retraining time for XGBoost, TabM, and FT-Transformer on both datasets.}
+%   \label{fig:pr-auc-vs-retrain}
+% \end{figure}
+
+In summary, the efficiency order across both datasets from most efficient to least efficient is XGBoost, then TabM, then FT-Transformer. When prioritizing solely on efficiency in a rapid CI/CD environment, XGBoost is the main choice for the fastest and cheapest option. For deep learning options, TabM is the stronger option because it is cheaper than FT-Transformer on retrain, latency, size, and peak RAM.
+
+\section{Discussion}
+
+\subsection{Predictive Performance}
+
+XGBoost is the strongest model overall, ranking first on PR-AUC and MCC on both datasets, with PR-AUC leads of 0.0381 on Ferenc and 0.0215 on Viszkok over the best deep model. The only metric on which a deep model beats it is F2 on Viszkok, where FT-Transformer scores 0.8193 against 0.8091, a margin of only 0.0102. This result should be read with care because F2 weights recall twice as heavily as precision and is computed from hard labels at a fixed threshold of 0.5, whereas PR-AUC evaluates the full ranking of predicted probabilities. FT-Transformer is lower than XGBoost on both PR-AUC (0.8856 against 0.9071) and MCC (0.7298 against 0.7773), so it does not rank functions better. The precision and recall values explain why it still wins on F2. At the 0.5 threshold, FT-Transformer reaches a recall of 0.8646 against 0.8125 for XGBoost, but its precision is only 0.6776 against 0.7959. Since F2 weights recall twice as heavily as precision, the recall gain outweighs the precision loss, whereas MCC, which balances both, favors XGBoost. In summary, FT-Transformer flags more functions as vulnerable, catching roughly ten more true positives at the cost of roughly forty more false alarms. The margin is small and comes from a single seed and test split, so it reflects a different operating point at a fixed threshold more than a better detector. 
+
+Between the two deep models, the choice depends on the dataset. On Ferenc, which has more rows (12,125 functions) but fewer features (32), TabM is ahead of FT-Transformer on every metric, and the gap is largest on MCC (0.6367 against 0.4679). On Viszkok, which has fewer rows (8,038 functions) but more features (54) because of the added process metrics, FT-Transformer is ahead of TabM, narrowly on PR-AUC (0.8856 against 0.8816) and more clearly on F2 and MCC. This pattern suggests that TabM is better suited to datasets with more rows, while FT-Transformer benefits more from richer feature sets, possibly because its attention layers can model interactions among many feature tokens. Therefore, FT-Transformer is only justified when the dataset contains rich features such as process metrics, and TabM is the more practical default among the deep models in our set.
+
+
+\subsection{Computational Efficiency}
+
+XGBoost is the clear winner on inference latency at 0.011 ms/sample on Ferenc and 0.003 ms/sample on Viszkok, compared with roughly 1 to 1.9 ms/sample for TabM and FT-Transformer. For a single function the difference is imperceptible, but it grows with the number of functions scored: 10,000 functions take about 0.11 s with XGBoost on Ferenc, against about 19 s with FT-Transformer. If the system re-checks code every time the developer pauses typing, or repeatedly within a short time, XGBoost is the practical choice because the checks run continuously and add up. If checks run only on demand, such as on a button press or at occasional intervals, the deep models are still acceptable since the cost per check is only a few milliseconds.
+
+The same reasoning applies to retraining, but the gaps are larger. XGBoost retrains in 0.021 min on Ferenc and 0.008 min on Viszkok, TabM needs 0.294 and 0.061 min, and FT-Transformer needs 1.880 and 0.764 min. If the model is refreshed only once every hour or two, or a couple of times a day, even the 1.9 minutes of FT-Transformer is acceptable. If the model is retrained on every push in a busy CI/CD pipeline, those minutes accumulate into queue delays and compute cost, so XGBoost is the better fit. These figures exclude the Optuna search time, so the full cost of introducing a new model type would be higher for the deep models.
+
+All three models are relatively small, with checkpoints between 0.409 MB (XGBoost on Viszkok) and 10.389 MB (FT-Transformer on Ferenc), so storage is not a limiting factor on any modern device or server. The deep models are nonetheless larger than XGBoost, and FT-Transformer is the largest on both datasets. The difference is likely to matter little here, but it could grow if the training data became larger or the architectures had to be scaled up, so model size should be rechecked in that case.
+
+Memory is the metric where the gap between model families is most practically relevant. XGBoost stays below 300 MB on both datasets (291 and 288 MB), so it can run alongside other processes without noticeable impact. TabM and FT-Transformer exceed 1 GB, reaching 1,401 and 2,021 MB on Ferenc and 1,705 and 2,472 MB on Viszkok. In a shared or busy environment such as a developer machine or a CI runner, using these models alongside with other applications may degrade their efficiency. Memory is therefore the main practical argument against deploying the deep models in resource-constrained settings.
+
+\section{Comparison With Prior Works}
+
+Ferenc et al. (2019) and Viszkok et al. (2021) evaluated several classifiers on the same two datasets using Precision, Recall, and F1-score. A direct comparison with this study is not fair, because the experimental environment differs. Their models were trained on an 80/10/10 split, with hyperparameters tuned by grid search and 10-fold cross-validation, ranked by F-measure, and with imbalance handled by random over-sampling and under-sampling. This study uses a different split and a different imbalance handling strategy (Sections 3.7, 3.8, and 5.1). Our hyperparameter tuning also targets PR-AUC, with F2 and MCC as supporting metrics, to handle the class imbalance of the datasets, not Precision, Recall, or F1. Nevertheless, the comparison is presented in Tables 5.9 and 5.10 for reference. It covers only the classifiers from the original studies, since other studies use varied environments that would be much harder to compare. For this section only, Precision, Recall, and F1 for our models are computed from the same held-out test predictions at threshold 0.5, which does not change the primary metrics. 
+
+\begin{table}[H]
+  \centering
+  \caption{Precision, Recall, and F1-score on the Ferenc static-metric table: published Ferenc et al. (2019) scores versus this study's held-out test scores at threshold 0.5}
+  \label{tab:comp-ferenc}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{2.5cm}|>{\centering\arraybackslash}p{2.5cm}|>{\centering\arraybackslash}p{2.5cm}|}
+    \hline
+    \textbf{Model} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-score} \\
+    \hline
+    KNN & 0.909 & 0.659 & 0.764 \\
+    DT & 0.737 & 0.697 & 0.716 \\
+    RFC / Forest & 0.931 & 0.578 & 0.713 \\
+    SDNN & 0.873 & 0.600 & 0.711 \\
+    CDNN & 0.911 & 0.579 & 0.708 \\
+    SVM & 0.953 & 0.514 & 0.668 \\
+    LogReg & 0.753 & 0.212 & 0.331 \\
+    LinReg & 0.843 & 0.154 & 0.261 \\
+    NB & 0.224 & 0.117 & 0.153 \\
+    XGBoost (this study) & 0.711 & 0.709 & 0.710 \\
+    TabM (this study) & 0.538 & 0.736 & 0.621 \\
+    FT-Transformer (this study) & 0.368 & 0.846 & 0.513 \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+\begin{table}[H]
+  \centering
+  \caption{Precision, Recall, and F1-score on the Viszkok static-plus-process table: published Viszkok et al. (2021) F-measure-optimal scores versus this study's held-out test scores at threshold 0.5}
+  \label{tab:comp-viszkok}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{2.5cm}|>{\centering\arraybackslash}p{2.5cm}|>{\centering\arraybackslash}p{2.5cm}|}
+    \hline
+    \textbf{Model} & \textbf{Precision} & \textbf{Recall} & \textbf{F1-score} \\
+    \hline
+    RFC & 0.958 & 0.760 & 0.848 \\
+    DT & 0.909 & 0.753 & 0.824 \\
+    KNN & 0.949 & 0.713 & 0.814 \\
+    SDNN & 0.921 & 0.716 & 0.805 \\
+    CDNN & 0.928 & 0.706 & 0.802 \\
+    SVM & 0.861 & 0.721 & 0.785 \\
+    LogReg & 0.743 & 0.517 & 0.609 \\
+    LinReg & 0.540 & 0.594 & 0.566 \\
+    NB & 0.278 & 0.120 & 0.167 \\
+    XGBoost (this study) & 0.796 & 0.812 & 0.804 \\
+    TabM (this study) & 0.678 & 0.844 & 0.752 \\
+    FT-Transformer (this study) & 0.678 & 0.865 & 0.760 \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+Our models score lower than the best classifiers from the previous studies on these metrics. As noted earlier, this is partly because the comparison is not direct, and partly because our study did not optimize the metrics used in the prior work. For a fair comparison, future work needs an identical environment in which all previous models and our models are compared, with hyperparameters tuned on the same set of metrics. 
+
+
+\section{Limitations of the Finding}
+
+Several limitations of this study come from its own design and scope. The experimental environment was not fully identical across models: XGBoost was run on a CPU while TabM and FT-Transformer were run on a GPU, which may affect the efficiency measurements, such as latency, retraining time, and peak RAM, and so limits how strictly the models can be compared on those metrics. The comparison with prior work in Section 5.5 is also limited because the previous studies used a different environment. A fairer comparison would need to reimplement every model, including those from the original studies, under one balanced setup. This was not done because the scope of this study was limited to reimplementing the three selected models. All results also come from a single random seed (42), so the reported differences, especially the small ones such as the F2 gap on Viszkok, may be partly due to randomness, and multiple seeds would be needed to average this out. In addition, most parameters that were not stated or implied by the study design were kept at neutral choices or at the original setup of the previous studies and were not tuned, such as the maximum of 150 epochs during hyperparameter tuning and 300 epochs for the final training of TabM and FT-Transformer. These untuned settings may favor some models over others. Finally, hyperparameter tuning used a single fixed validation split instead of cross-validation. Cross-validation would give a more stable estimate of each trial’s quality, but it was not used because of limited resources and time.
+
+Other limitations come from the data, which are outside the control of this study. The datasets are relatively small for deep learning models, although they are sufficient for classical machine learning models such as XGBoost. This may have worked against TabM and FT-Transformer, so their results here should not be taken as their performance on larger datasets. The datasets are also severely imbalanced, with about seven non-vulnerable functions for every vulnerable one. This makes the minority class harder to learn and makes the threshold-dependent metrics more sensitive to a small number of predictions. A dataset with a more balanced class distribution would be needed to examine how much of the observed behavior is caused by the imbalance.

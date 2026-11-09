@@ -1,0 +1,144 @@
+\documentclass[skripsi,inggris]{ugmskripsi}
+% Options:
+%   skripsi / proposal        (default: skripsi)
+%   satuspasi / duaspasi / satusetengahspasi (default: satusetengahspasi)
+%   indonesia / inggris       (default: indonesia)
+
+%------------------------------------------------------------
+% Metadata Skripsi
+%------------------------------------------------------------
+% TODO: Ganti metadata di bawah ini dengan data Anda sendiri
+\titleind{Deteksi Kerentanan Dalam JavaScript Menggunakan Arsitektur TabM}
+\titleeng{Javascript Vulnerability Detection using TabM Architectures}
+\fullname{Rama Andhika Pratama}
+\idnum{23/517333/PA/22175}
+\degree{Bachelor's Degree Program}
+\gelar{Bachelor of Computer Science}
+\yearsubmit{2026}
+\program{Computer Science}
+\dept{Computer Science and Electronics}
+\firstsupervisor{Arif Nurwidyantoro, S.Kom., M.Cs., Ph.D.}
+\firstexaminer{NAMA DOSEN PENGUJI 1}
+\secondexaminer{NAMA DOSEN PENGUJI 2}
+
+%------------------------------------------------------------
+% Packages
+%------------------------------------------------------------
+\usepackage[utf8]{inputenc}
+\usepackage{graphicx}
+\graphicspath{{figures/}}
+\usepackage{amsmath}
+\usepackage{amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{tabularx}
+\usepackage{multirow}
+\usepackage{float}
+\usepackage{listings}
+\usepackage{xcolor}
+\usepackage{hyperref}
+\hypersetup{hidelinks}
+\usepackage{url}
+\usepackage{xurl}
+\usepackage[htt]{hyphenat}
+% plainnat selects square brackets; author-year citations use parentheses.
+\AtBeginDocument{\setcitestyle{round}}
+\usepackage{enumitem}
+
+% Allow line breaks after underscores in normal text and monospaced text, and safe in math mode
+\DeclareRobustCommand{\_}{\ifmmode\mbox{\textunderscore}\else\textunderscore\allowbreak\fi}
+
+% Code listing style
+\lstset{
+    basicstyle=\ttfamily\small,
+    breaklines=true,
+    frame=single,
+    numbers=left,
+    numberstyle=\tiny,
+    keywordstyle=\color{blue},
+    commentstyle=\color{gray},
+    stringstyle=\color{orange},
+    showstringspaces=false,
+    tabsize=2
+}
+
+% Define YAML language for listings
+\lstdefinelanguage{yaml}{
+  keywords={true,false,null,y,n},
+  sensitive=false,
+  comment=[l]{\#},
+  morecomment=[s]{/*}{*/},
+  morestring=[b]',
+  morestring=[b]"
+}
+
+% Define Docker language for listings
+\lstdefinelanguage{docker}{
+  alsoletter={-},
+  keywords={FROM,RUN,CMD,LABEL,MAINTAINER,EXPOSE,ENV,ADD,COPY,ENTRYPOINT,VOLUME,USER,WORKDIR,ARG,ONBUILD,STOPSIGNAL,HEALTHCHECK,SHELL},
+  sensitive=false,
+  comment=[l]{\#},
+  morestring=[b]',
+  morestring=[b]"
+}
+
+%------------------------------------------------------------
+% Document Body
+%------------------------------------------------------------
+\begin{document}
+
+% Preliminary Pages (Skripsi: lengkap)
+\cover
+\titlepageind
+\titlepageeng
+\approvalpage
+\declarepage
+\motto
+\acknowledment
+
+\preface
+\addcontentsline{toc}{chapter}{\prefacename}
+Isi Prakata di sini...
+
+\tableofcontents
+\listoftables
+\listoffigures
+% \lambang  % Uncomment when you have nomenclature entries defined
+
+\abstractind
+% TODO: Tulis intisari dalam Bahasa Indonesia di sini (150-250 kata).
+% Jelaskan latar belakang, tujuan, metode, dan hasil penelitian.
+
+Metrik perangkat lunak tingkat fungsi dapat digunakan untuk mengklasifikasikan fungsi JavaScript sebagai rentan atau tidak rentan. Dataset Ferenc et al. (2019) dan Viszkok et al. (2021) yang menyediakan metrik tersebut sebelumnya dievaluasi menggunakan model machine learning klasik dan deep learning konvensional. Penelitian ini mengimplementasikan dan mengevaluasi tiga arsitektur pada kedua dataset tersebut, yaitu Gradient Boosted Decision Tree (XGBoost) sebagai baseline machine learning, FT-Transformer sebagai baseline deep learning berbasis attention, dan TabM sebagai model deep learning berbasis ensembel yang efisien secara parameter. Seluruh model dilatih menggunakan pipeline yang sama, yaitu pembagian data stratifikasi 60/20/20, normalisasi kuantil yang dilatih hanya pada data latih, pembobotan kelas untuk menangani ketidakseimbangan kelas, dan penyetelan hyperparameter menggunakan Optuna dengan PR-AUC sebagai target optimasi. Performa diukur pada data uji menggunakan PR-AUC, F2-Score, dan Matthews Correlation Coefficient (MCC), sedangkan efisiensi diukur melalui latensi inferensi, waktu pelatihan ulang, ukuran model, dan penggunaan memori puncak. XGBoost memperoleh PR-AUC dan MCC tertinggi pada kedua dataset (PR-AUC sebesar 0,8039 pada Ferenc dan 0,9071 pada Viszkok). Pada dataset Ferenc, TabM menempati peringkat kedua setelah XGBoost pada ketiga metrik performa, di atas FT-Transformer. Pada dataset Viszkok, FT-Transformer memperoleh F2-Score tertinggi (0,8193), melampaui XGBoost (0,8091), sedangkan XGBoost tetap unggul atas FT-Transformer pada PR-AUC dan MCC. XGBoost memiliki biaya komputasi terendah pada keempat metrik efisiensi di kedua dataset, diikuti TabM, kemudian FT-Transformer. Seluruh hasil berasal dari satu random seed.
+
+\endabstractind
+
+\abstracteng
+% TODO: Write abstract in English here (150-250 words).
+% Explain background, objectives, methods, and results.
+
+Function-level software metrics can be used to classify JavaScript functions as vulnerable or non-vulnerable. The datasets of Ferenc et al. (2019) and Viszkok et al. (2021), which provide these metrics, were originally evaluated with classical machine learning and conventional deep learning models. This study implements and evaluates three architectures on both datasets: a Gradient Boosted Decision Tree (XGBoost) as the machine learning baseline, FT-Transformer as an attention-based deep learning baseline, and TabM, a parameter-efficient ensemble-based deep learning model. All models were trained under the same pipeline: a stratified 60/20/20 split, quantile normalization fitted on the training set, class weighting for class imbalance, and Optuna hyperparameter tuning with PR-AUC as the target. Performance was measured on the held-out test set using PR-AUC, F2-Score, and Matthews Correlation Coefficient (MCC), and efficiency using inference latency, retraining time, model size, and peak memory. XGBoost obtained the highest PR-AUC and MCC on both datasets (PR-AUC of 0.8039 on Ferenc and 0.9071 on Viszkok). On Ferenc, TabM ranked second behind XGBoost on all three performance metrics, ahead of FT-Transformer. On Viszkok, FT-Transformer obtained the highest F2-Score (0.8193), above XGBoost (0.8091), while XGBoost remained ahead of it on PR-AUC and MCC. XGBoost had the lowest computational cost on all four efficiency metrics on both datasets, followed by TabM and then FT-Transformer. All results come from a single random seed.
+
+\endabstracteng
+
+%------------------------------------------------------------
+% Chapters
+%------------------------------------------------------------
+\include{chapters/ch1-introduction}
+\include{chapters/ch2-literature-review}
+\include{chapters/ch3-research-methodology}
+\include{chapters/ch4-implementation}
+\include{chapters/ch5-results-and-discussion}
+
+%------------------------------------------------------------
+% Bibliography
+%------------------------------------------------------------
+\bibliography{references}
+
+%------------------------------------------------------------
+% Appendices
+%------------------------------------------------------------
+\appendix
+\include{attachments/attachment-a}
+
+\end{document}

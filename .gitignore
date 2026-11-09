@@ -17,6 +17,9 @@
 **/*.ist
 **/*.loa
 
+# Build output dirs (LaTeX Workshop)
+**/out/
+
 # Generated PDFs (uncomment to ignore)
 # **/*.pdf
 

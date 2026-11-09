@@ -1,0 +1,63 @@
+\chapter{INTRODUCTION}
+
+\section{Background}
+
+% TODO: Tulis latar belakang penelitian Anda di sini.
+% Jelaskan konteks, urgensi, dan relevansi topik yang dipilih.
+% Rujuk pada penelitian terdahulu dan data sekunder jika ada.
+
+Modern systems are commonly developed using JavaScript, which makes the language a frequent target for cyber-attacks. When security flaws exist in a system, they can open the door to data breaches, which may lead to significant economic damage. As an illustration, software vulnerabilities cost the US economy an estimated \$60 billion annually in productivity loss and patch redeployment, with a single cyber-attack causing damages of up to \$8.75 billion \citep{anwar_measuring_2020}. The shift toward Continuous Integration and Continuous Deployment (CI/CD) can raise these risks further. To maintain a high-speed environment in CI/CD, highly sensitive credentials are often stored in a single, centralized location. If attackers compromise it, they may gain access to the entire deployment infrastructure \citep{pan_ambush_2024}. As development cycles become faster, traditional security methods struggle to keep up the pace.
+
+Numerous efforts have been made to create automated vulnerabilities detection to keep pace with the faster development cycles. Traditional static analysis tools were originally built to address software security risk issues automatically. However, these tools often produce large volumes of raw warnings with high false-positive rates. Therefore, developers had to manually review the code again, which defeats the purpose of having an efficient automated code detector \citep{cheirdari_analyzing_2018}. Machine learning and deep learning are strong candidates for vulnerability detection, since they learn vulnerability patterns directly from historical data. Classical machine learning models are lightweight and efficient, while deep learning models can learn richer representations of code, though often at higher computational cost \citep{harer_automated_2018}.
+
+However, raw source code usually cannot be fed directly into learning models. It must first go through a representation phase, which transforms it into a structured format that the model can process, such as graphs, tables, or tokens \citep{samoaa_systematic_2022}. Among these techniques, tabular representations are often considered the most efficient because they use readily available metrics or metadata, which suits the purpose of the CI/CD pipeline discussed previously \citep{prathuri_software_2026}. \citet{ferenc_challenging_2019} constructed a tabular JavaScript Vulnerability Dataset where they extracted the software metrics of diverse corpus from vast amounts of open-source JavaScript repositories into static source code metrics. The dataset was later expanded by \citet{viszkok_improving_2021} where they added historical process metrics to the original dataset. Both studies applied a limited amount of learning models to evaluate their datasets. This leaves a research gap for further exploration of how various learning models process their specific tabular data of software metrics.
+
+Recent advances in native tabular deep learning have produced architectures that perform strongly on tabular data. One such architecture, FT-Transformer (Feature Tokenizer + Transformer), proposed by \citet{gorishniy_revisiting_2023} is a general-purpose baseline for standard supervised classification and regression tasks on tabular data. It adapts the Transformer architecture by transforming all features into embeddings and applying a stack of Transformer layers, allowing every layer to operate at the feature level of one object. However, despite its strong predictive performance, FT-Transformer has been noted to be computationally expensive, as the self-attention mechanism scales poorly if the number of features and training samples adds up in the long run.
+
+To address this, \citet{gorishniy_tabm_2025} later introduced TabM, a parameter-efficient tabular deep learning architecture that uses an ensembling mechanism allowing a single neural network to simulate an ensemble of MLPs. Rather than relying on attention across features, TabM produces multiple predictions simultaneously while sharing the majority of the model's underlying parameters, and is reported to achieve competitive accuracy at a fraction of the computational cost. Given these properties, TabM is a promising candidate for JavaScript vulnerability prediction, where predictive performance and computational efficiency are both important.. Its lightweight nature may make it particularly well-suited for integration within rapid, high-throughput CI/CD pipelines, where inference speed and low overhead are as important as predictive reliability.
+
+Given that prior studies only evaluated a limited amount of learning models on their datasets, it remains unknown how modern tabular deep learning architectures perform on software metrics data. Therefore, this research proposes the implementation and the evaluation of TabM alongside with FT-Transformer on JavaScript vulnerability detection using the tabular software metrics dataset. The two architectures are evaluated based on predictive performance and computational cost, in order to determine whether these models can offer practical application in rapid CI/CD environments.
+
+
+\section{Problem Formulation}
+
+% TODO: Tulis perumusan produk dalam bentuk deklaratif.
+% Jelaskan produk apa yang akan dikembangkan.
+
+The current approaches for JavaScript vulnerability detection, particularly on tabular software metrics dataset, are limited to classical machine learning and deep learning models. This study addresses that gap by applying modern deep learning model, TabM, a recent native parameter-efficient tabular deep learning architecture. The model will be evaluated alongside FT-Transformer as a deep learning baseline and a Gradient Boosted Decision Tree (GBDT) Model, XGBoost, as a strong machine learning baseline to answer one main question: Does TabM offer any advantage over FT-Transformer and XGBoost for JavaScript vulnerability prediction using software metrics, in performance and cost?
+
+\section{Research Limitations}
+
+% TODO: Tulis batasan produk untuk memfokuskan pengembangan.
+
+To maintain a focused and achievable research objective, the scope and limitations of this study are defined as follows:
+
+\begin{enumerate}
+  \item The scope is exclusively limited to the JavaScript programming language and will not be extended to other languages such as C/C++ or Python.
+  \item This study is strictly limited to the tabular datasets constructed by \citet{ferenc_challenging_2019} and \citet{viszkok_improving_2021}. This constraint is necessary because of the current scarcity of metric-based JavaScript vulnerability datasets. While various vulnerability datasets exist, most of them provide raw source code instead of structured numerical features. As of June 2026, the Ferenc and Viszkok datasets are the only publicly available benchmarks, to the best of our knowledge, that fit the requirements of this research.
+  \item The comparison is confined to the numerical features within the tabular datasets, specifically the software metrics. Although the source code of every data exists within the datasets, it will not be utilized nor applied to the training process.
+  \item The evaluation is strictly bounded to three specific architectures: a Gradient Boosted Decision Tree (GBDT) machine learning (XGBoost), attention-based tabular deep learning (FT-Transformer), and parameter-efficient ensemble-based deep learning (TabM). The study will not explore or implement other architectures.
+\end{enumerate}
+
+\section{Research Objectives}
+
+% TODO: Tulis tujuan penelitian yang ingin dicapai.
+
+The specific objectives of this research are:
+
+\begin{enumerate}
+  \item To implement and evaluate the three different architectures—a Gradient Boosted Decision Tree, an attention-based deep learning architecture (FT-Transformer), and a parameter-efficient ensemble architecture (TabM)—on the JavaScript tabular software metrics datasets provided by \citet{ferenc_challenging_2019} and \citet{viszkok_improving_2021}.
+  \item To benchmark the predictive performance of the three architectures to determine which model most accurately and effectively captures vulnerability patterns within the datasets.
+  \item To determine whether TabM can deliver a favorable balance between predictive accuracy and computational efficiency, making it a practical option for real-world vulnerability detection pipelines.
+\end{enumerate}
+
+\section{Research Benefits}
+
+% TODO: Tulis manfaat penelitian bagi akademik dan praktis.
+
+The benefits derived from this research are divided into two categories:
+
+\begin{enumerate}
+  \item \textbf{Theoretical Benefits:} This study contributes empirical evidence to the underexplored intersection of native tabular deep learning and software vulnerability detection. By benchmarking the different architectures, this research provides a reproducible academic framework. It clarifies the theoretical viability and architectural trade-offs of using deep learning to capture complex vulnerability patterns using software metrics.
+  \item \textbf{Practical Benefits:} The findings of this research offer guidance to software engineers, security tool developers, and DevOps teams seeking automated vulnerability detection methods for their pipeline environment. By evaluating the trade-offs between the different architectures, they can determine whether the computational cost of deploying richer, complex representations is justified, or if a lightweight, efficient model provides a more practical balance of speed and accuracy for their high-speed environments.
+\end{enumerate}

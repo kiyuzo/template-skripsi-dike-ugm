@@ -1,0 +1,257 @@
+\chapter{RESEARCH METHODOLOGY}
+
+\section{General Description}
+
+This chapter describes the complete structure of the research methodology employed in this study. The research follows a structured pipeline designed to produce a fair and reproducible comparative evaluation. At a high level, the workflow proceeds through nine sequential stages: (1) data acquisition, (2) data preprocessing, (3) stratified data split, (4) class imbalance handling on training set, (5) model implementation, (6) hyperparameter tuning, (7) model training, (8) model evaluation, and (9) comparative analysis.
+Figure 3.1 presents the research flowchart that illustrates the research’s end-to-end pipeline. The process begins with  data acquisition, explaining about the characteristics of each dataset. The datasets are then preprocessed and partitioned into training, validation, and test sets. Before the models are configured, the imbalance inside the datasets will be adjusted using class weight. The models are then configured, tuned, and trained using the specified evaluation protocol. Finally, the models are evaluated on the held-out test set using a common suite of classification metrics, and their results are compared.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{"ch3/3.1 Research Pipeline Flowchart.png"}
+    \caption{Research Flowchart}
+    \label{fig:research-flowchart}
+\end{figure}
+
+\section{Data Acquisition}
+
+\subsection{\citet{ferenc_challenging_2019} Dataset}
+
+The first dataset was constructed by \citet{ferenc_challenging_2019} as part of a study investigating whether static source code metrics could serve as effective predictors of security vulnerabilities in JavaScript functions. To build the dataset, the authors mined two publicly available vulnerability databases, the Node Security Platform (nsp) and the Snyk Vulnerability Database. Then, they cross-referenced their entries with GitHub repositories to locate the specific commits that fixed each reported vulnerability. For each vulnerability, the corresponding patch file was extracted and mapped to the JavaScript functions it modified. Functions in the pre-fix version of the code (i.e., before the security patch was applied) that fell within the range of the patch's changed lines were marked as vulnerable, while all remaining functions in those same projects were marked as non-vulnerable. Test functions, identified by their location under "test" folders, were excluded to prevent them from distorting the prediction models. This process resulted in a dataset of 12,125 JavaScript functions drawn from over 300 open-source Node.js projects, of which 1,496 (approximately 12.3\%) are labeled as vulnerable and 10,629 as non-vulnerable and 35 available static source code metrics.
+
+For each function, 35 static source code metrics were computed using two complementary static analysis tools: OpenStaticAnalyzer and escomplex. Static source code metrics are structural properties derived by analyzing the source code at a single point in time without executing it. The metrics captured span several dimensions of code quality and complexity, including size metrics such as Lines of Code (LOC) and Logical Lines of Code (LLOC), complexity metrics such as Cyclomatic Complexity (McCC/CYCL) which counts the number of independent execution paths through a function, nesting metrics such as Nesting Level (NL), structural metrics such as the Number of Parameters (NUMPAR/PARAMS), clone-related metrics such as Clone Coverage (CC) and Clone Instances (CI), comment and documentation metrics such as Comment Density (CD) and Comment Lines of Code (CLOC), and the full suite of Halstead software science metrics — including Halstead Volume (HVOL), Halstead Difficulty (HDIFF), Halstead Effort (HEFF), and Halstead Bugs (HBUGS) — which characterize the information content and estimated error proneness of the code based on its operator and operand counts.
+
+The target label is a binary indicator stored in the final column of the dataset. A value of 1 denotes that the function was vulnerable, meaning it was directly modified by a known security-fixing commit prior to the fix being applied. A value of 0 denotes that the function was non-vulnerable, meaning it was not implicated in any vulnerability fix within the same codebase. This binary labeling scheme makes the dataset directly suitable for supervised binary classification.
+
+\subsection{\citet{viszkok_improving_2021} Dataset}
+
+To determine the performance of the models on different sets, this study also employs a second dataset provided by \citet{viszkok_improving_2021}. This dataset was originally constructed by \citet{ferenc_challenging_2019} and was expanded by Viszkok et al. to include historical process data derived from each project's version control history.
+
+The dataset contains function-level records extracted from the same corpus of over 300 open-source JavaScript repositories used in the original study. However, because the extraction of process metrics requires a complete and accessible Git history for each project, not all functions from the original 12,125-function dataset could be retained — projects whose repositories were no longer accessible or whose version control history was incomplete had to be excluded. As a result, the extended dataset contains 8,038 functions, a reduction of roughly 33\% from the original. This creates a trade-off that adding historical data gives the model more depth and features to work with, but it shrinks the overall size of the dataset. 
+
+For each function, the extended dataset preserves the original 35 static source code metrics. This count added seven additional metrics in the Ferenc et al. dataset because Viszkok et al. incorporated additional static metrics during the extension process, bringing the static metric total from 35 to 42. In addition, the dataset introduces 19 process metrics, also referred to as historical change or process metrics. It captures the development history of each function as recorded in its Git commit log. These include the Number of Modifications (NOMOD), which counts how many times a function was changed over its lifetime; the Number of Contributors (NOContr), which captures how many distinct developers modified it; Code Churn (CChurn), defined as the cumulative sum of lines added minus lines deleted; the Average Time Between Changes (AVGTBC); and various aggregated counts of added, deleted, and modified lines across commits. Together, the 42 static and 19 process metrics create an available combined feature space of 61 predictors per function, making this a substantially richer representation than the original dataset.
+
+This extended dataset serves as the second dataset for the experiments in this study. The richer feature set is expected to improve model performance, which was confirmed in the original study where Viszkok et al., reported significant gains in F-measure, precision, and recall when process metrics were added. Although the reduction in training samples may introduce its own flaws. The binary target label remains identical to that of the Ferenc et al. dataset: a value of 1 indicates that the function was vulnerable prior to a known security fix, while a value of 0 indicates that it was non-vulnerable. The class distribution also remains heavily imbalanced, with vulnerable functions constituting a minority of the total records.
+
+\section{Data Preprocessing}
+
+To ensure a fair and rigorous comparison, a standardized preprocessing pipeline is applied uniformly across all three architectures. Because the features derived from both datasets are strictly continuous numerical metrics, categorical encoding is not required. The preprocessing pipeline consists of the following three sequential steps:
+
+\begin{itemize}
+  \item \textbf{Feature Selection / Filtering:} Identifier columns (\emph{name, longname, path, full\_repo\_path, hash}, etc), zero-variance features (\emph{CLLC}, etc), and one feature from each near-identical collinear pair (\emph{HBUGS with HVOL, HTIME with HEFF}, etc) are removed from the dataset. These features carry no predictive signal and their removal are necessary for standard data hygiene practice rather than a model-specific decision, ensuring that all three architectures benefit equally from a cleaner feature space.
+  \item \textbf{Positional Columns Isolation:} Positional features such as \emph{line, column, endline,} and \emph{endcolumn} are excluded from model training. Although these columns are moderately correlated to the target variable (\emph{Vuln} $\approx$ 0.20), this relationship is likely an artifact of the dataset's construction rather than a generalizable signal. Retaining them may lead to all models exploiting the dataset construction artifact rather than actual vulnerability patterns, inflating performance scores and weakening the validity of the comparison.  However, unlike the previous preprocessing step, the features are kept for further observation. The target column is also isolated to control exposures between the data splits and which pipeline can access the target label.
+  \item \textbf{Symmetrical Feature Normalization:} Neural networks are sensitive to feature scale, skew, and outliers. In order to maintain well-conditioned input representation, QuantileTransformer is applied to all numerical features for all three models and fit on training data only. Because tree-based models are invariant to monotonic feature transformations, this only affects TabM and FT-Transformer, giving them a standard, well-conditioned input representation. We note this does not guarantee equal performance potential across model families.
+
+\end{itemize}
+
+\section{Data Splitting}
+
+The dataset is partitioned into three non-overlapping subsets: a training set, a validation set, and a test set. The split is performed using stratified sampling to preserve the original class ratio in all three subsets. Table~\ref{tab:split-ferenc} presents the data split configuration for Ferenc’s dataset and Table~\ref{tab:split-viszkok} presents the data split configuration for Viszkok’s Dataset.
+
+
+\begin{table}[H]
+  \centering
+  \caption{Data Split Configuration for Ferenc's Dataset}
+  \label{tab:split-ferenc}
+  \begin{tabular}{|c|c|c|c|}
+    \hline
+    \textbf{Dataset Split} & \textbf{Total Samples} & \textbf{Vulnerable} & \textbf{Non-Vulnerable} \\
+    \hline
+    Training (60\%) & $\sim$7,275 & $\sim$898 & $\sim$6,377 \\
+    Validation (20\%) & $\sim$2,425 & $\sim$299 & $\sim$2,126 \\
+    Test (20\%) & $\sim$2,425 & $\sim$299 & $\sim$2,126 \\
+    Total & 12,125 & 1,496 (12.34\%) & 10,629 (87.66\%) \\
+    \hline
+  \end{tabular}
+\end{table}
+
+\begin{table}[H]
+  \centering
+  \caption{Data Split Configuration for Viszkok's Dataset}
+  \label{tab:split-viszkok}
+  \begin{tabular}{|c|c|c|c|}
+    \hline
+    \textbf{Dataset Split} & \textbf{Total Samples} & \textbf{Vulnerable} & \textbf{Non-Vulnerable} \\
+    \hline
+    Training (60\%) & $\sim$4,823 & $\sim$576 & $\sim$4,247 \\
+    Validation (20\%) & $\sim$1,608 & $\sim$192 & $\sim$1,416 \\
+    Test (20\%) & $\sim$1,608 & $\sim$192 & $\sim$1,416 \\
+    Total & 8,038 & 960 (11.94\%) & 7,078 (88.06\%) \\
+    \hline
+  \end{tabular}
+\end{table}
+
+The 60/20/20 stratified split is selected because of the class imbalance in both datasets. Since the minority class makes up only about 12\% of the data, an 80/10/10 split would yield only 96 vulnerable samples in each evaluation set of Viszkok’s dataset, producing a 95\% confidence interval width of $\pm$0.103, which is too wide to support reliable comparisons between models. A 60/20/20 split instead provides 192 and 299 vulnerable samples in the validation and test sets of the Viszkok and Ferenc datasets respectively, narrowing the interval to $\pm$0.071 and $\pm$0.057. This choice trades training volume for evaluation reliability, leaving approximately 7,275 and 4,823 training samples for the Ferenc and Viszkok datasets. This trade-off applies equally to all three architectures, and the effect of training set size on each model is noted as a limitation of this study. All splits use a fixed random seed (seed = 42) to ensure reproducibility.
+
+
+\section{Class Imbalance Analysis and Handling}
+
+The dataset suffers from a severe class imbalance, with approximately 12\% of samples representing vulnerable functions and the remaining 88\% representing non-vulnerable functions. This inequality poses a significant challenge when doing model training. A naive classifier could predict every sample as non-vulnerable and it would still achieve an 88\% accuracy while completely failing at the intended detection task.
+
+To address this issue, this study employs class weight adjustment, a technique grounded in cost-sensitive learning \citep{elkan_foundations_nodate}, to mitigate the class imbalance problem. Cost-sensitive learning modifies the training objective so that the algorithm penalizes the model for misclassifying a minority sample more than a majority sample. Consequently, the loss function for each model is modified to assign a proportionally higher penalty to the vulnerable class. The weight assigned to the minority class is calculated using the equation below:
+
+
+\begin{equation}
+  W_{\text{minority}} = \frac{N_{\text{total}}}{C \times N_{\text{minority}}}
+  \label{eq:minority-weight}
+\end{equation}
+
+where \(N_{\text{total}}\) is the total number of samples, \(N_{\text{minority}}\) is the number of vulnerable samples, and \(C\) is the number of classes, which in this case would be equal to 2 because our task is binary classification. This method was chosen over SMOTE and oversampling methods because they distort feature space differently for different model architecture making an unfair comparison environment. In addition, for imbalanced tabular software metrics, retaining the original class imbalance and training standard classifiers without synthetic oversampling can be competitive or superior to SMOTE-based rebalancing, which may fail to adequately represent the minority distribution \citep{sakho_we_2026}.
+
+\begin{figure}[h]
+    \centering
+    \includegraphics[width=0.8\textwidth]{"ch3/3.2 Class Weight Application on Model Training Pipeline.png"}
+    \caption{Class Weight Application on Model Training Pipeline}
+    \label{fig:class-weight}
+\end{figure}
+
+\section{Model Implementation}
+\subsection{TabM (Native Tabular Deep Learning)}
+
+Each JavaScript function in the \citet{ferenc_challenging_2019} and \citet{viszkok_improving_2021} datasets enters the TabM model as a single standardized numerical vector $x \in \mathbb{R}^{n}$, where $n$ is the number of software metrics available in each respective dataset. Each of the $n$ numerical metrics is first passed through a non-linear numerical feature embedding, following the way Gorishniy et al. (2025) equip TabM with embeddings: a modified version of the piecewise-linear embeddings with quantile-based bins. The embedded metrics are flattened into a single vector $x_{\mathrm{emb}} \in \mathbb{R}^{(n \cdot d_{\mathrm{e}})}$, where $d_{\mathrm{e}}$ is the embedding size, and this vector is what the backbone receives. This study uses the embeddings because the paper reports that TabM mini with these embeddings outperforms TabM without them, both in average improvement over MLP (2.92\% vs. 2.15\%) and in mean rank (1.7 vs. 2.8), and because the aim of this study is to reimplement the paper's strongest model. At the start of the forward pass, the embedded vector is arranged into a parallel batch $X \in \mathbb{R}^{k \times (n \cdot d_{\mathrm{e}})}$ with one row per implicit ensemble member. At inference, each row is an identical copy of the embedded input. During training, the rows of $X$ may hold $k$ different training objects (the default in TabM) or the same objects (the shared-batch variant). This arrangement is the foundation of TabM's parameter-efficient ensembling: it allows all $k$ implicit ensemble members to be processed simultaneously in one forward pass, eliminating the need for $k$ separate model executions.
+
+Rather than building $k$ entirely separate networks, all $k$ input streams are routed through a single MLP backbone whose primary weight matrix $W \in \mathbb{R}^{d \times d}$ is shared across all members and handles the main computational work (following the paper, layer widths are simplified to $d_1 = d_2 = d$). To introduce diversity between members without duplicating $W$, each ensemble member $i \in \{1, \ldots, k\}$ is assigned a set of lightweight, non-shared adapter vectors $r_i$, $s_i$, $b_i \in \mathbb{R}^{d}$. The linear transformation for member $i$ at any given layer is computed as:
+
+\begin{equation}
+  \ell_i(x_i) = r_i \odot \big(W(s_i \odot x_i)\big) + b_i
+  \label{eq:tabm-linear}
+\end{equation}
+
+where $\odot$ denotes the Hadamard (elementwise) product, $r_i$ is the input adapter that scales the incoming representation before it is multiplied by $W$, $s_i$ is the output adapter that scales the result, and $b_i$ is a member-specific bias vector. In the first linear layer, the input adapter $r_i$ has the dimension of the flattened embedded input ($n \cdot d_{\mathrm{e}}$) instead of $d$, and is initialized from the standard normal distribution, as in the paper's embedding variants. This formulation is mathematically equivalent to giving each member its own unique weight matrix $W_i = W \odot (s_i r_i^{\mathsf{T}})$, but without explicitly constructing it. Each additional member adds only $3d$ parameters per layer, so the per-member overhead is $O(d)$ rather than the $O(d^2)$ of a separate weight matrix. Each of the $k$ streams therefore receives a distinctly transformed view of the $n$ input metrics, achieving representational diversity at negligible additional memory cost.
+
+After the linear transformation at each layer, standard non-linear operations are applied to each of the $k$ streams strictly independently. Specifically, a ReLU activation is applied elementwise to each stream's output, followed by Dropout regularization applied separately to each stream's activated representation. This per-stream independence is essential: because the non-linearities and stochastic masking are never shared across members, each of the $k$ simulated ensemble members traces a distinct, non-linear pathway through the $n$-dimensional software metric space across all $N$ hidden blocks of the backbone. This separation ensures that the ensemble members learn complementary feature combinations from the static and process metrics, which the final aggregation step then leverages to produce more robust predictions than any single member could achieve on its own.
+
+After passing through all $N$ hidden blocks, each of the $k$ parallel streams is fed into its own non-shared linear prediction head, producing $k$ separate scalar outputs $\{\hat{y}_1, \hat{y}_2, \ldots, \hat{y}_k\}$. Each output is passed through a Sigmoid activation function, $\sigma(\hat{y}_i) = (1 + e^{-\hat{y}_i})^{-1}$, which maps it to the interval $(0, 1)$ and gives member $i$'s vulnerability probability $p_i$. During training, each member's prediction is optimized with its own loss (binary cross-entropy against the label $y$), and the objective is the mean of these $k$ individual losses, $\frac{1}{k} \sum_{i=1}^{k} L(p_i, y)$. At inference, the $k$ member predictions are aggregated by computing the arithmetic mean of their probabilities, yielding a single unified probability $\bar{p} = \frac{1}{k} \sum_{i=1}^{k} p_i$ for the input function. A classification threshold of 0.5 is then applied: if $\bar{p} \geq 0.5$, the function is classified as vulnerable (label = 1); otherwise, it is classified as non-vulnerable (label = 0). A single sigmoid output with a fixed 0.5 threshold is used so that all models in this study are evaluated under the same decision rule, which keeps the reported classification metrics reflecting differences between the models rather than differences in how their outputs were combined. The complete end-to-end data flow described across all four stages, from input expansion through shared backbone processing to final aggregation, is illustrated in Figure 3.3.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{"ch3/3.3 The End-to-End Forward Pass of TabM.png"}
+    \caption{The End-to-End Forward Pass of TabM}
+    \label{fig:tabm-forward}
+\end{figure}
+
+\subsection{FT-Transformer}
+
+FT-Transformer is included in this study as the attention-based deep learning baseline for tabular vulnerability prediction. Its defining design choice is that every software metric is embedded as its own token and processed with self-attention, so the model can learn how metrics interact with one another instead of receiving them as one flat input vector. This sets it apart from the other models in this study, such as XGBoost as a tree-based model and TabM as a parameter-efficient deep learning alternative. The cost of this design scales with the number of input features: because self-attention is computed across all feature tokens, computation and memory grow with the number of features (quadratically in the number of tokens). A larger feature set gives the model more interactions to learn, which may improve predictive performance, but it also raises training time and memory requirements. This trade-off matters for a rapid CI/CD pipeline, where detection must remain practical to run. FT-Transformer is therefore used to examine whether the performance gained from modeling feature interactions justifies its added cost, particularly when moving from the 35-feature dataset to the 61-feature dataset.
+
+FT-Transformer, proposed by \citet{gorishniy_revisiting_2023} in \textit{Revisiting Deep Learning Models for Tabular Data}, adapts the Transformer architecture for tabular data through two sequential components: a Feature Tokenizer and a standard Transformer backbone. In this study, each JavaScript function is represented as a numerical feature vector, either 35 features from the \citet{ferenc_challenging_2019} dataset or 61 features from the \citet{viszkok_improving_2021} dataset, depending on which dataset is being processed. The Feature Tokenizer converts each scalar feature into a dense embedding vector by applying a per-feature linear projection combined with a learnable feature bias. This transforms the raw software metric vector into a sequence of token embeddings of shape $k \times d$, where $k$ is the number of features and $d$ is the embedding dimension.
+
+Once the feature embeddings are constructed, a special [CLS] (classification) token is prepended to the sequence, and the combined sequence of $k + 1$ tokens is passed through $L$ stacked Transformer layers. Each layer applies multi-head self-attention followed by a position-wise feed-forward network, with layer normalization and residual connections following the PreNorm variant. Because every feature token attends to every other feature token at each layer, the model captures interactions across all 35 or 61 software metrics simultaneously, and this is also the source of the cost scaling with $k$ described above. After all Transformer layers have been applied, the final representation of the [CLS] token serves as the aggregated function-level representation. This representation is passed through a linear prediction head activated by a sigmoid function, producing the vulnerability probability for the input function. A classification threshold of 0.5 is then applied: if $\sigma(\hat{y}) \geq 0.5$, the function is classified as vulnerable; otherwise it is classified as non-vulnerable.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{"ch3/3.4 The End-to-End Pipeline of FT-Transformer.png"}
+    \caption{The End-to-End Pipeline of FT-Transformer}
+    \label{fig:ft-transformer}
+\end{figure}
+
+\subsection{Gradient Boosted Decision Trees (GDBT)}
+
+XGBoost is included as the Gradient Boosted Decision Tree (GBDT) baseline for this study. GBDT models are widely regarded as strong performers on tabular data because they handle heterogeneous feature distributions through successive greedy partitioning of the feature space, and they can capture non-linear relationships between software metrics and vulnerability labels without manual feature engineering. XGBoost is therefore included as a strong baseline to examine whether any of the other models can compete with it in terms of the balance between performance and efficiency.
+
+In this study, XGBoost receives the preprocessed feature vector of a JavaScript function as input: 35 static source code metrics for the \citet{ferenc_challenging_2019} dataset, or 61 static and process metrics for the \citet{viszkok_improving_2021} dataset. Both are passed through a QuantileTransformer to normalize their distributions. XGBoost builds an additive ensemble of regression trees \citep{chen_xgboost_2016} within the gradient boosting framework of \citet{friedman_httpwwwjstororg_2001}. At each boosting iteration, a new tree is fit using the gradient and Hessian of the binary cross-entropy loss with respect to the current ensemble’s log-odds predictions. For this loss, the gradient reduces to the difference between the predicted probability and the true label, so each new tree concentrates on the functions the model currently misfits. Each tree greedily selects the split variable and threshold that maximize the gain in a regularized objective. The resulting leaf weights are added to the ensemble scaled by a learning rate $\nu$, a shrinkage strategy that improves generalization \citep{friedman_httpwwwjstororg_2001}. After M iterations, the ensemble’s log-odds score is passed through the sigmoid function and thresholded at 0.5 for binary classification.
+
+To address the severe class imbalance in both datasets, \texttt{scale\_pos\_weight} is set to the ratio of non-vulnerable to vulnerable training samples (approximately 7.10 for the Ferenc dataset and 7.37 for the Viszkok dataset). This upweights the gradient and Hessian of each minority-class sample, in line with the cost-sensitive objective described in Section 3.5. Hyperparameters are tuned with Optuna’s TPE sampler on the fixed validation set, using PR-AUC as the optimization target with early stopping. Since the two datasets differ in feature dimensionality, each is tuned independently under the same protocol. The tuned model for each dataset is then retrained on the corresponding training set and evaluated on the held-out test set.
+
+\begin{figure}[H]
+    \centering
+    \includegraphics[width=0.8\textwidth]{"ch3/3.5 The End-to-End Pipeline of XGBoost.png"}
+    \caption{The End-to-End Pipeline of XGBoost}
+    \label{fig:xgboost}
+\end{figure} 
+
+\section{Hyperparameter Tuning}
+
+To ensure a fair and unbiased comparison, all three models are tuned with the same protocol: the same search algorithm, number of trials, validation set, and tuning metric. Tuning is performed exclusively on the training and validation sets, and the held-out test set is never accessed during this phase. Table~\ref{tab:hparam} summarizes the tuning configuration for each model.
+
+
+\begin{table}[H]
+  \centering
+  \footnotesize
+  \setlength{\tabcolsep}{3pt}
+  \renewcommand{\arraystretch}{1.15}
+  \caption{Hyperparameter Tuning Configuration for All Three Architectures}
+  \label{tab:hparam}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{2.5cm}|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}X|}
+    \hline
+    \textbf{Hyperparameter} & \textbf{GBDT (XGBoost)} & \textbf{FT-Transformer} & \textbf{TabM} \\
+    \hline
+    Search Method & Optuna (TPE) & Optuna (TPE) & Optuna (TPE) \\
+    \hline
+    Num of Trials & 50 trials & 50 trials & 50 trials \\
+    \hline
+    Validation Strategy & Fixed val set & Fixed val set & Fixed val set \\
+    \hline
+    Tuning Metric & PR-AUC & PR-AUC & PR-AUC \\
+    \hline
+    Early Stopping & 50 Rounds & 20 Epochs & 20 Epochs \\
+    \hline
+    Key Parameters Tuned &
+    n\_estimators [50--2000] $\cdot$ max\_depth [3--12] $\cdot$ learning\_rate [0.001--0.3] $\cdot$ subsample [0.5--1.0] $\cdot$ colsample\_bytree [0.5--1.0] $\cdot$ min\_child\_weight [1--10] $\cdot$ reg\_alpha [0--5] $\cdot$ reg\_lambda [0--5] $\cdot$ scale\_pos\_weight fixed at 7.37 / 7.10 &
+    num\_layers [1--4] $\cdot$ d\_token [64--512] $\cdot$ n\_heads \{4, 8\} $\cdot$ attention\_dropout [0.0--0.4] $\cdot$ ffn\_dropout [0.0--0.4] $\cdot$ ffn\_factor [1.0--4.0] $\cdot$ learning\_rate [1e-5--1e-3] $\cdot$ weight\_decay [1e-6--1e-3] $\cdot$ batch\_size \{256, 512, 1024\} &
+    num\_layers [1--4] $\cdot$ hidden\_dim [64--512] $\cdot$ dropout [0.0--0.5] $\cdot$ learning\_rate [1e-5--1e-2] $\cdot$ weight\_decay [1e-6--1e-3] $\cdot$ batch\_size \{256, 512, 1024\} $\cdot$ k multiplier [4--64] \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+Optuna with the Tree-structured Parzen Estimator (TPE) sampler is used for all three models. TPE is a probabilistic method that concentrates sampling on promising regions of the search space, which makes it more sample-efficient than grid or random search. Using the same sampler for every model ensures that no model benefits from a more capable search algorithm.
+
+Each model is tuned with 50 trials. A fixed trial count was chosen over a fixed time budget so that every model receives the same number of search iterations regardless of its per-trial cost. The search spaces differ between models because the architectures have different hyperparameters (eight tuned parameters for XGBoost, nine for FT-Transformer, and seven for TabM; see Table~\ref{tab:hparam}), but the search effort is identical. Since tuning is performed once offline before deployment, its duration is not treated as a deployment cost and is reported only as supplementary information. 
+
+A fixed validation set is used for hyperparameter tuning and early stopping in all three models. This keeps the tuning protocol uniform: applying cross-validation to only some of the models would give them a more thorough validation than the others, and applying it to all of them would add complexity to early stopping, which requires a fixed set of held-out samples to monitor. The fixed validation set is the same stratified partition defined in Section 3.4, so all models are tuned and stopped against identical data. A limitation of this choice is that hyperparameter selection depends on a single validation set, which contains relatively few vulnerable samples (approximately 299 and 192 for the Ferenc and Viszkok datasets, respectively).
+
+As for the tuning metric, PR-AUC is selected for all models. Given the class imbalance of approximately 88:12 between non-vulnerable and vulnerable classes, ROC-AUC would be unsuitable, because it is heavily influenced by the number of true negatives. On the other hand, PR-AUC focuses on the precision and recall of the minority class, which is the class that actually matters in vulnerability detection. Applying the same metric across all three models ensures that all are being optimized toward the same objective.
+
+Early stopping is applied to all models to prevent overfitting, monitoring validation PR-AUC in every case. The patience values differ because the unit of training progress differs between model families, so equal numbers would not represent equal patience. For XGBoost, each boosting round adds one tree and the validation score typically improves gradually, particularly at the low learning rates included in the search space (down to 0.001) and with up to 2,000 estimators. A patience of 50 rounds is therefore used. For TabM and FT-Transformer, each epoch is a full pass over the training data, and a patience of 20 epochs is used for both. These values are fixed in advance and are not tuned.
+
+\section{Model Evaluation}
+Given the class imbalance in our dataset, specific evaluation metrics are needed to correctly measure the performance of our models. The focus should lean towards minimizing false negatives, as a false negative that passes into the deployment pipeline is considerably more dangerous than a false positive. Ensuring that the trade-off between model performance and computational resource consumption is reasonable is also an important consideration, as it allows us to identify which model delivers strong performance while remaining lightweight enough for application in a rapid CI/CD environment. To address both concerns, the evaluation metrics are split into two distinct categories: performance metrics and efficiency metrics.
+
+\subsection{Performance Mentrics}
+PR-AUC measures the area under the Precision-Recall curve across all classification thresholds for the minority class. It summarizes the full precision-recall tradeoff on the vulnerable class without being inflated by the majority class. On the other hand, ROC AUC is susceptible to inflation caused by high true negative counts, which can make a poorly performing model appear deceptively strong. Therefore, PR-AUC is chosen over ROC-AUC as the primary performance metric.
+\begin{equation}
+  \text{PR-AUC} = \sum_{i=1}^{n} (R_i - R_{i-1}) P_i
+  \label{eq:pr-auc}
+\end{equation}
+
+where \(P_i\) is the precision at threshold \(i\), derived from:
+
+\begin{equation}
+  \text{Precision} = \frac{\text{TP}}{\text{TP} + \text{FP}}
+  \label{eq:precision}
+\end{equation}
+
+and \(R_i\) is the recall at threshold \(i\), derived from:
+
+\begin{equation}
+  \text{Recall} = \frac{\text{TP}}{\text{TP} + \text{FN}}
+  \label{eq:recall}
+\end{equation}
+
+F2-Score measures the \emph{F-beta} at \(\beta = 2\), weighting recall twice as heavily as precision. This evaluation metric is important for vulnerability detection because a false negative or a missed vulnerability is much more dangerous than a false positive or a non-vulnerable that were flagged as vulnerable.
+
+\begin{equation}
+  \text{F2-Score} = \frac{5 \times \text{Precision} \times \text{Recall}}{(4 \times \text{Precision}) + \text{Recall}}
+  \label{eq:f2}
+\end{equation}
+
+MCC or Matthews Correlation Coefficient is a correlation coefficient, which uses all four cells of the confusion matrix. This evaluation metric is necessary for imbalanced binary classification. It complements PR-AUC by capturing TP, TN, FP, FN simultaneously, avoiding the PR-AUC blind spot of ignoring true negatives.
+
+\begin{equation}
+  \text{MCC} = \frac{(\text{TP} \times \text{TN}) - (\text{FP} \times \text{FN})}{\sqrt{(\text{TP} + \text{FP})(\text{TP} + \text{FN})(\text{TN} + \text{FP})(\text{TN} + \text{FN})}}
+  \label{eq:mcc}
+\end{equation}
+
+ \subsection{Efficiency Metrics}
+Inference latency is the mean time, in milliseconds, needed to predict a single sample from the test set. The XGBoost is measured on a single CPU thread as its computational cost on this dataset is relatively low and a fixed, single-threaded configuration allows retraining time and other efficiency metrics to be measured more consistently than on a GPU. In contrast, TabM and FT-Transformer were trained on a GPU for faster processing since training and hyperparameter tuning these models on a CPU would substantially increase computation time. Take note that the models were not evaluated on equivalent hardware, though it does not affect the predictive performance of all three models.
+
+Retraining time is the wall-clock time, in minutes, needed to retrain the model from scratch on the training set. In a rapid CI/CD workflow, models may be retrained on every code push or at regular intervals. A model with a long retraining time creates a bottleneck in the pipeline, even if its inference is fast.
+
+Model size is the storage footprint of the trained model, measured in megabytes (MB). It determines how much space is needed in CI/CD artifact registries and how costly it is to store, version, and transfer the model. This matters most for larger architectures such as FT-Transformer, whose parameter count tends to produce a considerably bigger model than tree-based methods.
+
+Peak memory (RAM) is the maximum RAM used during inference, measured in megabytes (MB). It indicates whether a model can run within the resource limits of a standard CI runner, which are typically restricted in memory. Models with a heavy memory footprint, such as FT-Transformer, may be difficult to run on lightweight runners.
+
+
+\section{Hardware and Software Environment}
+All experiments are conducted in a consistent computational environment to ensure reproducibility. The primary software stack consists of Python 3.12.4 as the programming language, PyTorch 2.5.1 as the deep learning framework for the TabM and FT-Transformer implementations, the XGBoost library, Scikit-learn for preprocessing utilities, Optuna for hyperparameter optimization, and Pandas and NumPy for data manipulation.
+
+The hardware environment used for training consists of a workstation equipped with an NVIDIA GeForce RTX 4060 GPU with 8GB VRAM, 16 GB of system RAM, and an Intel Core  i7-14650HX processor. All experiments are run with a fixed global random seed (seed = 42) applied to all relevant libraries (NumPy, PyTorch, Python random module) to guarantee reproducibility of results.

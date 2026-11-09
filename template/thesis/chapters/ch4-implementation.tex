@@ -1,0 +1,303 @@
+\chapter{IMPLEMENTATION}
+\sloppy
+\emergencystretch=3em
+
+\section{Data Pipeline Implementation}
+
+The data pipeline is executed once per dataset by using \path{python -m src.run_preprocessing}. Preprocessing, splitting, normalization, and class-weight computation live in separate modules and are then run by using \path{src/run_preprocessing.py}. The three model runners never access the raw CSV files. Instead, they read the processed split files and the \path{metadata.json} saved in \path{data/processed/ferenc/} and \path{data/processed/viszkok/}. This integration keeps the feature space identical across all model runners.
+
+\subsection{Data Acquisition}
+
+The unprocessed tabular data are placed inside \path{data/raw/Ferenc.csv} and \path{data/raw/Viszkok.csv}. \path{src/data_loading.py} reads each file using pandas and defines \texttt{load\_ferenc()} and \texttt{load\_viszkok()} functions. The binary target column is \texttt{Vuln}, as stated in both source datasets (\citep{ferenc_challenging_2019}; \citep{viszkok_improving_2021}). Paths, global seed, and split ratios are defined in \path{src/config.py} therefore later stages cannot drift from the original configuration defined in Section 3.4.
+
+\subsection{Preprocessing}
+
+The preprocessing step starts with feature filtering, implemented in \path{src/preprocessing.py} by using \texttt{filter\_features()}. It applies the same rules defined in Section 3.3 to both datasets, using whichever columns are present. Identifier columns listed in \texttt{config.IDENTIFIER\_COLUMNS} are removed, positional columns listed in \texttt{config.POSITIONAL\_COLUMNS} are copied aside and are excluded from training, numeric columns with at most one unique value are dropped, and if two remaining numeric columns are almost the same (Pearson correlation $\geq 0.999$), the earlier column is kept and the later one is dropped. A correlation threshold of 0.999 was selected to ensure that only the most highly correlated feature pairs are handled. A \texttt{PreprocessingReport} records the dropped columns and serializes them into \path{metadata.json}. In the previous sections, it is mostly stated that there are 35 static metrics for \citet{ferenc_challenging_2019} dataset and 61 static metrics for \citet{viszkok_improving_2021} dataset. However, after filtering with \texttt{filter\_features()}, these counts are reduced to 32 features for Ferenc and 54 features for Viszkok. Tables \ref{tab:removals-ferenc} and \ref{tab:removals-viszkok} list the details of the removed columns, including the reason they are removed.
+
+\begin{table}[H]
+  \centering
+  \caption{Column removals details for Ferenc et al. (2019) dataset}
+  \label{tab:removals-ferenc}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{2.8cm}|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}X|}
+    \hline
+    \textbf{Step} & \textbf{Columns removed} & \textbf{Reason} \\
+    \hline
+    Identifiers & name, longname, path, full\_repo\_path & Metadata; no metric signal \\
+    \hline
+    Zero variance & CLLC & Constant column; no information \\
+    \hline
+    Collinearity (abs $r \ge 0.999$) & HBUGS (kept HVOL), HTIME (kept HEFF) & Near-duplicate Halstead identities \\
+    \hline
+    Positional isolation & line, column, endline, endcolumn & Location artifact of dataset construction \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+\begin{table}[H]
+  \centering
+  \caption{Column removals details for Viszkok et al. (2021) dataset}
+  \label{tab:removals-viszkok}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}p{2.8cm}|>{\raggedright\arraybackslash}X|>{\raggedright\arraybackslash}X|}
+    \hline
+    \textbf{Step} & \textbf{Columns removed} & \textbf{Reason} \\
+    \hline
+    Identifiers & name, longname, path, full\_repo\_path, hash, type & Metadata; type is a constant label \\
+    \hline
+    Zero variance & WarningBlocker, WarningCritical, WarningInfo, WarningMinor & Constant columns; no information \\
+    \hline
+    Collinearity (abs $r \ge 0.999$) & CLLC (kept CLC), HVOL (kept HBUGS), HTIME (kept HEFF), HON\_T (kept HLEN), HVOC (kept HON\_D) & Near-duplicate or derived pairs \\
+    \hline
+    Positional isolation & line, column, endline, endcolumn, start\_line, start\_column, end\_line, end\_column & Location artifact of dataset construction \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+Normalization is applied only after the split in order to make sure the test distribution can not enter the transformer. \texttt{fit\_quantile\_transformer()} constructs a scikit-learn QuantileTransformer with \texttt{output\_distribution="normal"}, \texttt{n\_quantiles = min(1000, n\_train)}, and \texttt{random\_state = 42}, then calls fit on the training matrix alone. \texttt{apply\_quantile\_transform()} transforms train, validation, and test with that fitted object. The fitted transformer is saved to \path{quantile_transformer.joblib}.
+
+\begin{figure}[H]
+  \centering
+\begin{lstlisting}[language=python]
+# src/preprocessing.py -- train-only QuantileTransformer
+n_quantiles = min(1000, len(X_train))
+qt = QuantileTransformer(
+    n_quantiles=n_quantiles,
+    output_distribution="normal",
+    random_state=random_state,
+)
+qt.fit(X_train)
+return qt
+\end{lstlisting}
+  \caption{Train-only QuantileTransformer fitting in src/preprocessing.py.}
+  \label{fig:train-only-qt}
+\end{figure}
+
+\subsection{Data Split}
+
+The 60/20/20 stratified partition is implemented in \path{src/splitting.py}. Since scikit-learn's \texttt{train\_test\_split} only able to cut a matrix in two, the \texttt{train\_test\_split} has to be called twice and sequentially. The first stratify splits the data into training data and the remainder (40\%). The remainder is then split into two sets, validation set and test set. Both calls use the stratify method on the current label vector and \texttt{random\_state = 42}. Table \ref{tab:split-sizes} reports the actual numbers of data that are also reported inside \path{metadata.json}. The Viszkok training split contains 4,822 rows, rather than the rounded 4,823 shown in Table 3.2. This difference exists because of rounding in Table 3.2 and not a change of method.
+
+\begin{figure}[H]
+  \centering
+\begin{lstlisting}[language=python]
+# src/splitting.py -- two-step stratified 60/20/20 split
+X_train, X_rest, y_train, y_rest = train_test_split(
+    X, y,
+    test_size=val_test_size,
+    stratify=y,
+    random_state=random_state,
+)
+relative_test_size = test_size / val_test_size
+X_val, X_test, y_val, y_test = train_test_split(
+    X_rest, y_rest,
+    test_size=relative_test_size,
+    stratify=y_rest,
+    random_state=random_state,
+)
+\end{lstlisting}
+  \caption{Two-step stratified 60/20/20 split in src/splitting.py.}
+  \label{fig:two-step-split}
+\end{figure}
+
+\begin{table}[H]
+  \centering
+  \caption{Realized stratified split sizes (seed = 42)}
+  \label{tab:split-sizes}
+  \begin{tabularx}{\textwidth}{|>{\raggedright\arraybackslash}X|>{\centering\arraybackslash}p{2.2cm}|>{\centering\arraybackslash}p{2.2cm}|>{\centering\arraybackslash}p{1.8cm}|>{\centering\arraybackslash}p{2.6cm}|}
+    \hline
+    \textbf{Dataset} & \textbf{Train (60\%)} & \textbf{Validation (20\%)} & \textbf{Test (20\%)} & \textbf{Features after filtering} \\
+    \hline
+    Ferenc et al. (2019) & 7,275 & 2,425 & 2,425 & 32 \\
+    Viszkok et al. (2021) & 4,822 & 1,608 & 1,608 & 54 \\
+    \hline
+  \end{tabularx}
+\end{table}
+
+\subsection{Class Imbalance Handling}
+
+The imbalance of both datasets is handled using class weight. The weights are computed only from the training set in \path{src/class_weights.py}. \texttt{compute\_class\_weights()} returns one weight for each class, while \texttt{compute\_scale\_pos\_weight()} returns a single ratio of non-vulnerable to vulnerable training rows. The resulting class weights are 0.5704 (non-vulnerable) and 4.0506 (vulnerable) for Ferenc, and 0.5678 (non-vulnerable) and 4.1857 (vulnerable) for Viszkok. The scaled weight ratios are 7.1013 for Ferenc and 7.3715 for Viszkok. The scaled ratio is needed because XGBoost expects \texttt{scale\_pos\_weight} while PyTorch expects \texttt{pos\_weight}. Both values are then stored in \path{metadata.json} and later read by the model runners.
+
+\begin{figure}[H]
+  \centering
+\begin{lstlisting}[language=python]
+# src/class_weights.py
+def compute_class_weights(y_train, num_classes=2):
+    n_total = len(y_train)
+    counts = y_train.value_counts().to_dict()
+    weights = {}
+    for class_label, n_class in counts.items():
+        weights[int(class_label)] = n_total / (num_classes * n_class)
+    return weights
+
+def compute_scale_pos_weight(y_train):
+    n_pos = int(y_train.sum())
+    n_neg = len(y_train) - n_pos
+    return n_neg / n_pos
+\end{lstlisting}
+  \caption{Class-weight computation from Equation 3.1 and the XGBoost ratio in src/class\_weights.py.}
+  \label{fig:class-weight-comp}
+\end{figure}
+
+In summary, the preprocessing method produces these outputs: six split files, the positional columns file, the fitted QuantileTransformer, and \path{metadata.json}. The preprocessing steps are run only at the beginning and are never repeated during later training or testing. To avoid data leakage, the data are split before normalization and class-weight computation. Normalization is then fit on the training set only, and class weights are also computed from the training labels only. Therefore, the full order of the preprocessing is: filter features, split into train/validation/test, QuantileTransformer normalization, then compute class weights.
+
+\begin{figure}[H]
+  \centering
+\begin{lstlisting}[language=python]
+# src/run_preprocessing.py -- split before normalization
+X_train, X_val, X_test, y_train, y_val, y_test = (
+    stratified_train_val_test_split(X, y)
+)
+qt = fit_quantile_transformer(X_train)
+X_train_t, X_val_t, X_test_t = apply_quantile_transform(
+    qt, X_train, X_val, X_test
+)
+class_weights = compute_class_weights(y_train)
+\end{lstlisting}
+  \caption{Preprocessing orchestration that splits before normalization in src/run\_preprocessing.py.}
+  \label{fig:run-preprocessing}
+\end{figure}
+
+\section{Model \& Training Pipeline Implementation}
+
+Each model has its own class, but all three use the same method names and the same order: \texttt{tune()}, \texttt{train()}, then \texttt{predict\_proba()}. The code inside each method is customized for that model. The runners also follow the same structure, with model-specific details inside. Their shared order is: load the same preprocessed data, read \texttt{scale\_pos\_weight} from \path{metadata.json}, run the sequence above, then save the model checkpoint and write the results to a JSON file for that model and dataset.
+
+\subsection{XGBoost}
+
+XGBoost is not reimplemented, instead it is adopted from the \texttt{xgboost} library (Chen and Guestrin, 2016). The \texttt{XGBoostVulnModel} class in \path{src/models/xgboost_model.py} wraps the imported model \texttt{xgb.XGBClassifier} along with its customization. The fixed settings are set inside \texttt{\_base\_params()}, which are: \texttt{objective="binary:logistic"}, \texttt{eval\_metric="aucpr"}, the stored \texttt{scale\_pos\_weight}, \texttt{n\_jobs=1} is chosen so that later CPU latency is comparable to the PyTorch models, and \texttt{random\_state=42}. The search space used by \texttt{tune()} then follows the setup defined in Table 3.3. After \texttt{tune()} stores the optimal parameters, \texttt{train()} then builds a new classifier, calls \texttt{fit} with the validation split as \texttt{eval\_set} and 50 early-stopping rounds, and returns the wall-clock duration of that fit in minutes. The fitted model is saved using joblib to \path{models/<dataset>/xgboost.joblib}.
+
+\subsection{TabM}
+
+TabM is reimplemented in PyTorch in \path{src/models/tabm_model.py}, following Gorishniy et al. (2025) rather than using the \texttt{tabm} library. \texttt{TabMVulnModel} wraps the custom \texttt{TabMNet} architecture. The fixed settings for TabM are the \texttt{pos\_weight} stored in the dataset metadata (used in \texttt{nn.BCEWithLogitsLoss}), \texttt{seed=42}, and CUDA for training whenever \texttt{torch.cuda.is\_available()} is true. In the architecture, \texttt{TabMNet} first applies a piecewise-linear numerical embedding (\texttt{NumericalEmbedding}), which encodes each feature with 32 quantile-based bins fitted on \texttt{X\_train} and stored as a model buffer, and projects it to a \texttt{d\_embedding}-dimensional vector. The per-feature vectors are concatenated and passed through stacked \texttt{TabMEnsembleLayer} blocks that apply Equation 3.2, each followed by ReLU and Dropout for every ensemble member. During training, each mini-batch is split into $k$ disjoint chunks so that each of the $k$ members sees different objects, while inference (and the optional \texttt{shared\_batch=True} mode) replicates the embedded input $k$ times. Each member then has its own non-shared linear head that produces one logit, supervised with binary cross-entropy against the label of its own object. At inference, a sigmoid is applied to each logit and the $k$ probabilities are averaged, then thresholded at 0.5. \texttt{train()} rebuilds the network from the architecture configuration, runs the Adam training loop for up to 300 epochs with early stopping on validation PR-AUC (patience of 20 epochs), and returns the wall-clock duration in minutes. The results are saved to \path{models/<dataset>/tabm.pt} (state dict, including the fitted bin edges) and \path{tabm_arch.json}.
+
+\begin{figure}[H]
+  \centering
+\begin{lstlisting}[language=python, literate={⊙}{{$\odot$}}1]
+# src/models/tabm_model.py -- TabMEnsembleLayer.forward
+def forward(self, x: torch.Tensor) -> torch.Tensor:
+    # x may be (batch, n) or (batch, k, n); the embedding is applied per
+    # object, so all leading dimensions are flattened first.
+    leading = x.shape[:-1]
+    flat    = x.reshape(-1, self.n_features)           # (M, n_features)
+    enc     = self._piecewise_linear(flat)             # (M, n, n_bins)
+    # (M, n, n_bins) x (n, d, n_bins) -> (M, n, d)
+    emb = torch.einsum("mnk,ndk->mnd", enc, self.weight) + self.bias
+    return emb.reshape(*leading, self.out_dim)
+\end{lstlisting}
+  \caption{TabM ensemble-layer forward pass implementing Equation 3.2 in src/models/tabm\_model.py.}
+  \label{fig:tabm-forward-pass}
+\end{figure}
+
+\subsection{FT-Transformer}
+
+FT-Transformer is also reimplemented using PyTorch in \path{src/models/ft_transformer.py}, following Gorishniy et al. (2021). \texttt{FTTransformerVulnModel} wraps the custom FT-Transformer network. The fixed settings are the stored \texttt{pos\_weight} from \path{metadata.json} (used in \texttt{BCEWithLogitsLoss}), \texttt{seed=42}, and CUDA when \texttt{torch.cuda.is\_available()} is true. In the architecture, \texttt{FeatureTokenizer} converts each numeric feature into a token of width \texttt{d\_token}. Then, a learnable \texttt{[CLS]} token is prepended. After that, an \texttt{FTTransformerLayer} stacks PreNorm multi-head self-attention and a feed-forward block. Finally, a linear head converts the \texttt{[CLS]} representation to a single logit. The search space used by \texttt{tune()} that follows the defined set in Table 3.3. After \texttt{tune()} stores \texttt{best\_params}, \texttt{train()} rebuilds the network, runs the training loop with early stopping of 20 epochs, and returns the wall-clock duration in minutes. The results are saved to two different files, \path{models/<dataset>/ft_transformer.pt} for the state dict and \path{ft_transformer_arch.json}.
+
+\section{Tuning \& Training-loop Implementation}
+
+The hyperparameter tuning is implemented using Optuna 4.1.0 with the Tree-structured Parzen Estimator (Akiba et al., 2019). The trial counts, early-stopping patience, and search ranges follow Table 3.3. In every trial, the model is scored by validation PR-AUC, and Optuna searches for hyperparameters that maximize that score. The \texttt{tune()} method receives only the training and validation data. After the search, each model is retrained from scratch with the best hyperparameters. The total Optuna search time is not stored. Instead, only the duration of this final retrain is recorded as the retraining time.
+
+\subsection{XGBoost Search}
+
+\texttt{XGBoostVulnModel.tune()} starts an Optuna search with \texttt{TPESampler(seed=42)} and \texttt{direction="maximize"}, then runs 50 trials. On each trials, Optuna uses the ranges defined in Table 3.3, builds an \texttt{XGBClassifier}, and fits it with 50-round early stopping on the validation set. Each trial is scored by validation PR-AUC using \texttt{average\_precision\_score}. This XGBoost search does not use a MedianPruner since it trains faster than the deep learning models. Note that this choice may improve the performance of XGBoost. After tuning finishes, \texttt{train()} runs one final fit with the best parameters and records that fit time as the retraining duration.
+
+\subsection{TabM and FT-Transformer Search}
+
+Both TabM and FT-Transformer use the same tuning loop. In \texttt{tune()}, Optuna is set up with a MedianPruner which contains 5 startup trials and 10 warmup steps, then it runs 50 trials. Inside each trial, \texttt{\_training\_loop} builds the network, trains it with Adam using the sampled weights and weight decay, and runs for up to 150 epochs. After every epoch, validation PR-AUC is computed and reported to Optuna, which may stop a weak trial early using \texttt{TrialPruned}. In addition, training also stops if validation PR-AUC does not improve for 20 epochs. Before the trial returns its score, the best weights from that trial are restored. For FT-Transformer, \texttt{d\_token} is kept as a multiple of \texttt{n\_heads} so \texttt{nn.MultiheadAttention} can run. In conclusion, TPE chooses the hyperparameters, MedianPruner stops weak trials, and patience 20 provides early stopping as stated in Table 3.3.
+
+
+
+\begin{figure}[H]
+  \centering
+\begin{lstlisting}[language=python]
+# src/models/tabm_model.py -- Optuna study and pruned training loop
+sampler = optuna.samplers.TPESampler(seed=self.seed)
+pruner  = optuna.pruners.MedianPruner(
+    n_startup_trials=5, n_warmup_steps=10
+)
+study = optuna.create_study(
+    direction="maximize", sampler=sampler, pruner=pruner
+)
+study.optimize(objective, n_trials=n_trials)
+
+# inside _training_loop, after each epoch:
+if trial is not None:
+    trial.report(val_auc, epoch)
+    if trial.should_prune():
+        raise optuna.exceptions.TrialPruned()
+if no_improve >= patience:
+    break
+\end{lstlisting}
+  \caption{Optuna TPE study with MedianPruner and early stopping in src/models/tabm\_model.py.}
+  \label{fig:optuna-study}
+\end{figure}
+
+\subsection{Final Retrain}
+
+After \texttt{best\_params} is stored, \texttt{TabMVulnModel.train()} and the FT-Transformer \texttt{train()} method use the same training loop again, but with \texttt{max\_epochs=300} and no Optuna trial object, therefore pruning is turned off. The time returned by this final training is saved as \texttt{retraining\_time\_min} in the metrics JSON. For XGBoost, \texttt{train()} also measures only this final fit, not only the 100 tuning fits. The runner then saves the model results and continues to evaluation.
+
+\section{Evaluation and Comparison Implementation}
+
+Evaluation is implemented in \path{src/evaluate.py} and used by all three runners. It is called once per model after the final retrain. This section explains how each model summarized its results and how the comparison table is produced, including the two time columns. The held-out test split is used here for the first time inside each runner.
+
+\subsection{Performance Fields}
+
+\texttt{predict\_proba} returns the positive-class probability for every test row. \texttt{compute\_performance\_metrics} passes those probabilities to scikit-learn \texttt{average\_precision\_score} to obtain the PR-AUC. It then thresholds at 0.5 and computes F2-Score with \texttt{beta=2} and MCC using \texttt{matthews\_corrcoef}. The three numbers are written inside the metrics JSON under the performance section.
+
+\begin{figure}[H]
+  \centering
+\begin{lstlisting}[language=python]
+# src/evaluate.py -- test-set performance fields
+y_pred = (y_prob >= threshold).astype(int)
+pr_auc = average_precision_score(y_true, y_prob)
+f2     = fbeta_score(y_true, y_pred, beta=2, zero_division=0)
+mcc    = matthews_corrcoef(y_true, y_pred)
+return {"pr_auc": float(pr_auc), "f2_score": float(f2), "mcc": float(mcc)}
+\end{lstlisting}
+  \caption{Test-set PR-AUC, F2-Score, and MCC computation in src/evaluate.py.}
+  \label{fig:eval-perf}
+\end{figure}
+
+\subsection{Efficiency Fields including Training Time and Testing Time}
+
+The comparison table has two time columns and they measure different operations. Testing time measures how long an already trained model takes to score new data as inference latency. \texttt{measure\_inference\_latency\_ms} calls \texttt{predict\_proba} on the test set, discards the first warm-up call, times the next 10 calls, converts each duration to milliseconds per sample, and stores the mean as \texttt{inference\_latency\_ms\_per\_sample}. TabM and FT-Transformer run this on a GPU, while XGBoost already uses \texttt{n\_jobs=1} for the single-thread CPU. This follows the CI/CD-oriented protocol in Section 3.8.2. 
+
+The training time inside the table is only retraining time. Each model's \texttt{train()} times one final fit with the best hyperparameters and saves that value as \texttt{retraining\_time\_min}. This shows how long a refit takes when the training set is updated, and it does not include the 50 Optuna trials. The remaining efficiency fields are file size and peak RAM usage.
+
+\begin{figure}[H]
+  \centering
+\begin{lstlisting}[language=python]
+# src/evaluate.py -- per-sample CPU inference latency
+_ = predict_fn(X)  # warm-up, not timed
+latencies = []
+for _ in range(n_repeats):
+    t0 = time.perf_counter()
+    _ = predict_fn(X)
+    latencies.append((time.perf_counter() - t0) * 1000 / len(X))
+return float(np.mean(latencies))
+\end{lstlisting}
+  \caption{CPU per-sample inference latency measurement in src/evaluate.py.}
+  \label{fig:eval-latency}
+\end{figure}
+
+\texttt{get\_model\_size\_mb} returns the model size in megabytes. \path{src/compare.py} prefers the on-disk file under \path{models/} when assembling the table. \texttt{measure\_peak\_ram\_mb} polls process RSS every millisecond during one \texttt{predict\_proba} call and stores the maximum as \texttt{peak\_ram\_inference\_mb}.
+
+\subsection{How the Comparison Table is Generated}
+
+After all six runners have finished, \path{python -m src.compare} loads \path{results/metrics/<model>_<dataset>.json} for XGBoost, TabM, and FT-Transformer on both datasets. \texttt{build\_rows()} copies the performance and efficiency values into one row per model. The script then prints a console table and writes \path{comparison_table.json} and \path{comparison_table.md}. Each column comes from a runner JSON, and \path{compare.py} does not retrain or re-score the test set. These numeric results are used as discussion material in Chapter 5.
+
+\begin{figure}[H]
+  \centering
+\begin{lstlisting}[language=python]
+# src/compare.py -- mapping JSON fields into table columns
+rows.append({
+    "model": MODEL_LABELS[model],
+    "pr_auc": float(perf["pr_auc"]),
+    "f2_score": float(perf["f2_score"]),
+    "mcc": float(perf["mcc"]),
+    "inference_latency_ms_per_sample":
+        float(eff["inference_latency_ms_per_sample"]),
+    "retraining_time_min": float(eff["retraining_time_min"]),
+    "model_size_mb": float(eff["model_size_mb"]),
+    "peak_ram_inference_mb": float(eff["peak_ram_inference_mb"]),
+})
+\end{lstlisting}
+  \caption{Mapping of stored JSON fields into comparison-table columns in src/compare.py.}
+  \label{fig:compare-mapping}
+\end{figure}

@@ -21,7 +21,7 @@ cd template-skripsi-dike-ugm
 
 ### 3. Ganti Metadata
 
-Edit file `template/proposal/main.tex` dan `template/skripsi/main.tex`, ganti semua placeholder:
+Edit file `template/thesis/main.tex`, ganti semua placeholder:
 
 ```latex
 \titleind{Judul Penelitian Anda dalam Bahasa Indonesia}
@@ -35,18 +35,16 @@ Edit file `template/proposal/main.tex` dan `template/skripsi/main.tex`, ganti se
 
 ### 4. Tulis Konten
 
-Edit file-file di `template/*/chapters/` dan ganti konten lorem ipsum dengan tulisan Anda.
+Edit file-file di `template/thesis/chapters/` dan ganti konten dengan tulisan Anda.
 
 ### 5. Compile
 
 ```bash
 # Opsi 1: Makefile (membutuhkan texlive terinstall)
-make proposal
-make skripsi
+make thesis
 
 # Opsi 2: Docker (tidak perlu texlive)
-make proposal-docker
-make skripsi-docker
+make thesis-docker
 ```
 
 ---
